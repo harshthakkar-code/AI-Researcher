@@ -240,7 +240,7 @@ export default function ResearchProgressPage({
                   <p>Awaiting first telemetry event from AI service worker...</p>
                 </div>
               ) : (
-                logs.map((log) => {
+                logs.map((log, idx) => {
                   const agentColor =
                     log.agent === 'Researcher'
                       ? 'text-blue-400 bg-blue-500/10 border-blue-500/20'
@@ -252,7 +252,7 @@ export default function ResearchProgressPage({
 
                   return (
                     <div
-                      key={log.id || log.created_at + log.event}
+                      key={log.id ? `${log.id}-${idx}` : `${log.created_at}-${log.event}-${idx}`}
                       className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1.5"
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -285,9 +285,9 @@ export default function ResearchProgressPage({
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sources.map((s) => (
+            {sources.map((s, idx) => (
               <a
-                key={s.id || s.url}
+                key={s.id ? `${s.id}-${idx}` : `${s.url}-${idx}`}
                 href={s.url}
                 target="_blank"
                 rel="noreferrer"
@@ -322,7 +322,7 @@ export default function ResearchProgressPage({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {facts.map((f, i) => (
               <div
-                key={f.id || i}
+                key={f.id ? `${f.id}-${i}` : `fact-${i}`}
                 className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5"
               >
                 <div className="flex items-center justify-between">

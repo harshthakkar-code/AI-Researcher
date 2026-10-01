@@ -15,8 +15,10 @@ import {
   Zap,
   ShieldCheck,
   BrainCircuit,
+  Trash2,
 } from 'lucide-react';
 import { ResearchJob } from '@/types';
+import DeleteConfirmModal from '@/components/ui/DeleteConfirmModal';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -25,6 +27,11 @@ export default function Dashboard() {
   const [recentJobs, setRecentJobs] = useState<ResearchJob[]>([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Modal State
+  const [modalJob, setModalJob] = useState<ResearchJob | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Suggestions for fast exploration
   const suggestions = [
@@ -76,6 +83,38 @@ export default function Dashboard() {
     } catch (err: any) {
       setErrorMessage(err.message);
       setIsSubmitting(false);
+    }
+  };
+
+  const promptDeleteJob = (job: ResearchJob, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setModalJob(job);
+    setIsModalOpen(true);
+  };
+
+  const confirmDeleteJob = async () => {
+    if (!modalJob) return;
+
+    try {
+      setIsDeleting(true);
+      const res = await fetch(`/api/research/${modalJob.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete research job');
+      }
+
+      // Optimistically remove from state
+      setRecentJobs((prev) => prev.filter((j) => j.id !== modalJob.id));
+      setIsModalOpen(false);
+      setModalJob(null);
+    } catch (err: any) {
+      alert(`Error deleting job: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -202,7 +241,7 @@ export default function Dashboard() {
           </div>
           <button
             onClick={fetchRecentJobs}
-            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
           >
             Refresh
           </button>
@@ -226,7 +265,7 @@ export default function Dashboard() {
             {recentJobs.map((job) => (
               <div
                 key={job.id}
-                className="glass-panel rounded-2xl p-6 transition-all hover:border-white/20 hover:bg-white/[0.03] flex flex-col justify-between gap-4"
+                className="glass-panel rounded-2xl p-6 transition-all hover:border-white/20 hover:bg-white/[0.03] flex flex-col justify-between gap-4 group"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -246,10 +285,20 @@ export default function Dashboard() {
                       )}
                       {job.status}
                     </span>
-                    <span className="text-xs text-gray-500 flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {new Date(job.created_at).toLocaleDateString()}
-                    </span>
+
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500 flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {new Date(job.created_at).toLocaleDateString()}
+                      </span>
+                      <button
+                        onClick={(e) => promptDeleteJob(job, e)}
+                        className="text-gray-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10 cursor-pointer"
+                        title="Delete research"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <h3 className="text-lg font-semibold text-white line-clamp-2">
@@ -298,6 +347,21 @@ export default function Dashboard() {
           </div>
         )}
       </section>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={isModalOpen}
+        title="Delete Research Report"
+        itemTopic={modalJob?.topic || ''}
+        isDeleting={isDeleting}
+        onConfirm={confirmDeleteJob}
+        onClose={() => {
+          if (!isDeleting) {
+            setIsModalOpen(false);
+            setModalJob(null);
+          }
+        }}
+      />
     </div>
   );
 }

@@ -19,7 +19,15 @@ export function useResearchProgress(researchId: string) {
       if (!res.ok) throw new Error('Failed to fetch research details');
       const data = await res.json();
       setJob(data.job);
-      setLogs(data.logs || []);
+
+      // Strictly deduplicate logs by ID
+      const incomingLogs = data.logs || [];
+      const logMap = new Map<string, AgentLog>();
+      incomingLogs.forEach((l: AgentLog) => {
+        if (l.id) logMap.set(l.id, l);
+      });
+      setLogs(Array.from(logMap.values()));
+
       setSources(data.sources || []);
       setFacts(data.facts || []);
       setReport(data.report || null);
@@ -69,7 +77,13 @@ export function useResearchProgress(researchId: string) {
           filter: `research_id=eq.${researchId}`,
         },
         (payload) => {
-          setLogs((prev) => [...prev, payload.new as AgentLog]);
+          const newLog = payload.new as AgentLog;
+          setLogs((prev) => {
+            if (prev.some((l) => l.id === newLog.id)) {
+              return prev;
+            }
+            return [...prev, newLog];
+          });
         }
       )
       .subscribe();

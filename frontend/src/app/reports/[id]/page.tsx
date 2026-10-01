@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -17,8 +18,10 @@ import {
   Loader2,
   AlertCircle,
   Share2,
+  Trash2,
 } from 'lucide-react';
 import { Report, ResearchJob, Source } from '@/types';
+import DeleteConfirmModal from '@/components/ui/DeleteConfirmModal';
 
 export default function ReportPage({
   params,
@@ -26,11 +29,16 @@ export default function ReportPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const [job, setJob] = useState<ResearchJob | null>(null);
   const [report, setReport] = useState<Report | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+
+  // Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     async function fetchReportData() {
@@ -71,6 +79,26 @@ export default function ReportPage({
     URL.revokeObjectURL(url);
   };
 
+  const confirmDeleteReport = async () => {
+    try {
+      setIsDeleting(true);
+      const res = await fetch(`/api/research/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete research report');
+      }
+
+      setIsDeleteModalOpen(false);
+      router.push('/dashboard');
+    } catch (err: any) {
+      alert(`Error deleting report: ${err.message}`);
+      setIsDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
@@ -88,12 +116,21 @@ export default function ReportPage({
         <p className="text-sm text-gray-400">
           The autonomous agents are still completing synthesis or the report could not be found.
         </p>
-        <Link
-          href={`/research/${id}`}
-          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors"
-        >
-          View Live Progress
-        </Link>
+        <div className="flex items-center justify-center gap-3">
+          <Link
+            href={`/research/${id}`}
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors"
+          >
+            View Live Progress
+          </Link>
+          <button
+            onClick={() => setIsDeleteModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </button>
+        </div>
       </div>
     );
   }
@@ -116,14 +153,14 @@ export default function ReportPage({
           </div>
         </div>
 
-        {/* Export / Share actions */}
+        {/* Export / Share / Delete actions */}
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopyMarkdown}
             className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-gray-300 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
           >
             {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied ? 'Copied Markdown' : 'Copy Markdown'}
+            {copied ? 'Copied' : 'Copy'}
           </button>
 
           <button
@@ -132,6 +169,15 @@ export default function ReportPage({
           >
             <Download className="h-3.5 w-3.5" />
             Download .md
+          </button>
+
+          <button
+            onClick={() => setIsDeleteModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors cursor-pointer"
+            title="Delete this report"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete</span>
           </button>
         </div>
       </div>
@@ -201,6 +247,18 @@ export default function ReportPage({
           </div>
         </aside>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        title="Delete Research Report"
+        itemTopic={job?.topic || ''}
+        isDeleting={isDeleting}
+        onConfirm={confirmDeleteReport}
+        onClose={() => {
+          if (!isDeleting) setIsDeleteModalOpen(false);
+        }}
+      />
     </div>
   );
 }

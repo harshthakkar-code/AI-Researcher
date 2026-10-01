@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function GET(
   request: Request,
@@ -38,6 +39,32 @@ export async function GET(
       report: reportRes.data?.[0] || null,
     });
   } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    // Use admin client with service role key to permanently delete regardless of RLS
+    const adminSupabase = createAdminClient();
+
+    const { error } = await adminSupabase
+      .from('research_jobs')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Failed to delete research job:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, message: 'Research job and all artifacts permanently deleted' });
+  } catch (error: any) {
+    console.error('Error during deletion:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

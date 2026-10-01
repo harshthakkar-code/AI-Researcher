@@ -122,3 +122,43 @@ body {
   font-size: 0.875em;
   color: #93c5fd;
 }
+
+/* Markdown Tables */
+.prose-report table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.5rem 0;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(14, 19, 31, 0.6);
+}
+
+.prose-report th {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.825rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.prose-report td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.875rem;
+  color: #e5e7eb;
+}
+
+.prose-report tr:last-child td {
+  border-bottom: none;
+}
+
+.prose-report tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
