@@ -23,16 +23,64 @@ class ValidatorAgent:
         conflicts = []
 
         # Domain credibility heuristics
-        high_trust_domains = {"arxiv.org", "github.blog", "nature.com", "ieee.org", "acm.org"}
+        high_trust_domains = {
+            "arxiv.org", "github.blog", "nature.com", "ieee.org", "acm.org",
+            "reuters.com", "bloomberg.com", "variety.com", "deadline.com",
+            "thehindu.com", "indianexpress.com", "bookmyshow.com", "ticketmaster.com"
+        }
 
+        # AI-powered fact verification if key available
+        if settings.gemini_api_key and len(facts) > 3:
+            try:
+                from google import genai
+                client = genai.Client(api_key=settings.gemini_api_key)
+                claims_text = "\n".join([f"{i+1}. {f.get('claim')} (Source: {f.get('domain')})" for i, f in enumerate(facts[:20])])
+                v_prompt = f"""You are a senior fact-checker. Review these factual claims collected for topic "{topic}":
+{claims_text}
+
+Identify any claims that are clearly contradicted, outdated, or unreliable.
+Return a valid JSON array of indices (1-indexed) of the claims that are factually sound and corroborated.
+Example: [1, 2, 4, 5]
+"""
+                candidate_models = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+                for model_name in candidate_models:
+                    try:
+                        resp = client.models.generate_content(model=model_name, contents=v_prompt)
+                        import json
+                        import re
+                        txt = resp.text.strip()
+                        array_match = re.search(r'\[[\d,\s]*\]', txt)
+                        if array_match:
+                            approved_indices = set(json.loads(array_match.group(0)))
+                        else:
+                            approved_indices = set(range(1, len(facts) + 1))
+                        for i, f in enumerate(facts):
+                            is_approved = (i + 1) in approved_indices
+                            validated_facts.append({
+                                **f,
+                                "confidence": "high" if is_approved else "medium",
+                                "validated": is_approved
+                            })
+                        logger.info(f"AI Fact-Checker validated {len(validated_facts)} claims with {model_name}")
+                        return {
+                            "validated_facts": validated_facts,
+                            "conflicts": conflicts,
+                            "high_confidence_count": sum(1 for f in validated_facts if f["confidence"] == "high")
+                        }
+                    except Exception as merr:
+                        logger.warning(f"AI Validator with {model_name} failed: {merr}")
+            except Exception as e:
+                logger.warning(f"AI Validator initialization failed: {e}")
+
+        # Heuristic validation fallback
         for f in facts:
             domain = f.get("domain", "")
             claim = f.get("claim", "")
 
             # Default confidence assessment
-            if domain in high_trust_domains:
+            if domain in high_trust_domains or any(d in domain for d in high_trust_domains):
                 confidence = "high"
-            elif any(d in domain for d in ["techcrunch.com", "bloomberg.com", "reuters.com", "theverge.com"]):
+            elif any(d in domain for d in ["techcrunch.com", "bloomberg.com", "reuters.com", "theverge.com", "filmibeat"]):
                 confidence = "high"
             else:
                 confidence = "medium"
@@ -40,7 +88,6 @@ class ValidatorAgent:
             # Check for conflict cues
             is_conflicted = False
             for prev in validated_facts:
-                # Check for timeline or claim friction
                 if ("2025" in claim and "2026" in prev.get("claim", "")) or \
                    ("outperforms" in claim and "underperforms" in prev.get("claim", "")):
                     conflicts.append({

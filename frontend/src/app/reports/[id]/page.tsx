@@ -185,21 +185,33 @@ export default function ReportPage({
       {/* Main Grid: Report Content + Sources Sidebar */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Report Article Container */}
-        <article className="lg:col-span-8 glass-panel rounded-3xl p-8 sm:p-12 space-y-6">
-          <div className="border-b border-white/5 pb-6 space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">
-              Autonomous Synthesis Document
-            </span>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              {report?.title || job?.topic}
-            </h1>
-            <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400 pt-2">
-              <span>Word Count: ~{report?.word_count || report?.content_markdown.split(/\s+/).length || 0}</span>
-              <span>•</span>
-              <span>Citations: {sources.length} Verified Sources</span>
-              <span>•</span>
-              <span className="text-emerald-400 font-semibold">Evidence Grounded</span>
+        <article className="lg:col-span-8 glass-panel rounded-3xl p-8 sm:p-12 space-y-6 relative">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-6">
+            <div className="space-y-2 flex-1 min-w-[280px]">
+              <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">
+                Autonomous Synthesis Document
+              </span>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+                {report?.title || job?.topic}
+              </h1>
+              <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400 pt-2">
+                <span>Word Count: ~{report?.word_count || report?.content_markdown.split(/\s+/).length || 0}</span>
+                <span>•</span>
+                <span>Citations: {sources.length} Verified Sources</span>
+                <span>•</span>
+                <span className="text-emerald-400 font-semibold">Evidence Grounded</span>
+              </div>
             </div>
+
+            {/* Direct Copy Button inside Generated Report */}
+            <button
+              onClick={handleCopyMarkdown}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600/10 border border-blue-500/30 px-4 py-2.5 text-xs sm:text-sm font-semibold text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 transition-all cursor-pointer shadow-sm"
+              title="Copy entire report markdown"
+            >
+              {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+              <span>{copied ? 'Copied to Clipboard!' : 'Copy Report'}</span>
+            </button>
           </div>
 
           {/* Render Markdown Content */}
@@ -209,6 +221,18 @@ export default function ReportPage({
             </ReactMarkdown>
           </div>
         </article>
+
+        {/* Floating Quick-Copy Button */}
+        <div className="fixed bottom-6 right-6 z-40">
+          <button
+            onClick={handleCopyMarkdown}
+            className="flex items-center gap-2 rounded-full bg-blue-600/90 hover:bg-blue-500 text-white px-5 py-3 text-xs sm:text-sm font-semibold shadow-2xl backdrop-blur-md border border-white/20 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            title="Copy full report to clipboard"
+          >
+            {copied ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
+            <span>{copied ? 'Copied!' : 'Copy Report'}</span>
+          </button>
+        </div>
 
         {/* Sources & Citations Sidebar */}
         <aside className="lg:col-span-4 space-y-6">

@@ -55,6 +55,22 @@ def extract_datetime(snippet: str, title: str) -> str:
     return date_str
 
 
+def extract_venue(snippet: str, title: str, default: str = "Local Venue / Arena") -> str:
+    """Extracts explicit venue names from snippet and title."""
+    combined = f"{title} {snippet}"
+    venue_patterns = [
+        r'\b([A-Z][a-zA-Z0-9\s&]+(?:Stadium|Auditorium|Amphitheatre|Amphitheater|Riverfront|Grounds?|Club|Arena|Convention Centre|Centre|Center|Hall|Mall))\b',
+        r'\b(?:at|venue:?)\s+([A-Z][a-zA-Z0-9\s&]{3,35})\b',
+    ]
+    for pat in venue_patterns:
+        m = re.search(pat, combined)
+        if m:
+            val = m.group(1).strip()
+            if len(val) > 4 and not any(w in val.lower() for w in ["upcoming", "schedule", "tickets", "best", "event"]):
+                return val
+    return default
+
+
 class WriterAgent:
     """Agent responsible for synthesizing research and validated facts into an authoritative Markdown report."""
 
@@ -82,65 +98,69 @@ class WriterAgent:
 
                 facts_summary = "\n".join([
                     f"- {f.get('claim')} [Source: {f.get('domain', 'Web')}]"
-                    for f in validated_facts[:15]
+                    for f in validated_facts[:25]
                 ])
 
                 sources_summary = "\n".join([
-                    f"- [{i+1}] {s.get('title')} ({s.get('url')})\n  Content: {(s.get('content') or s.get('snippet', ''))[:400]}"
-                    for i, s in enumerate(sources[:10])
+                    f"- [{i+1}] {s.get('title')} ({s.get('url')})\n  Domain: {s.get('domain')}\n  Key Harvested Content: {(s.get('content') or s.get('snippet', ''))[:1500]}"
+                    for i, s in enumerate(sources[:12])
                 ])
 
                 if is_movie:
                     domain_instructions = """
-The user is specifically inquiring about upcoming movie releases.
-You MUST format the report with dedicated, richly detailed tables categorized by industry:
+The user is specifically inquiring about movie launches and theatrical/streaming releases.
+You MUST produce rich, verified, structured Markdown tables categorized as follows:
 
 ### Hollywood & Global Theatrical Releases
-| Release Date | Movie Title | Genre / Key Details | Star Cast & Director |
+| Release Date | Movie Title | Genre & Synopsis | Star Cast & Director | Verified Source |
 (List every verified major film launching in this timeframe, with exact release dates, synopsis, and stars)
 
 ### Indian Cinema Releases (Bollywood & Regional)
-| Release Date | Movie Title | Language | Cast & Key Highlights |
+| Release Date | Movie Title | Language | Cast & Key Highlights | Verified Source |
 (List confirmed Hindi, Tamil, Telugu, and regional theatrical premieres with release dates)
 
-### Streaming & Digital Premieres (Netflix, Prime Video, Disney+)
-(List any direct-to-digital films launching in this period)
+### Streaming & Digital Premieres (Netflix, Prime Video, Disney+, Apple TV+)
+| Premiere Date | Title | Platform | Synopsis & Cast | Verified Source |
+(List direct-to-digital films launching in this period)
 """
                 elif is_concert:
                     domain_instructions = """
-The user is inquiring about concerts and live music performances.
+The user is inquiring about live concerts, music festivals, and performances.
 You MUST format the report with clear schedules, venues, and timings:
 
-### Verified Concert Schedule & Venues
-| Date & Time | Artist / Event | Venue & Location | Platform & Ticket Link |
+### Verified Concert Schedule, Dates & Venues
+| Date & Time | Artist / Band / Event | Exact Venue & City | Platform / Booking Link |
+(Include verified dates, start times, and specific venue names such as stadiums, auditoriums, clubs, or amphitheaters)
 
-### Venue Guide & Timings
-(Detail gate timings, addresses, and entry protocols)
+### Venue Directory & Attendee Guide
+(Detail gate entry timings, venue locations/addresses, and booking platform details like BookMyShow or Insider)
 """
                 else:
                     domain_instructions = """
-Structure the report with executive findings, structured comparison tables, key metrics, and strategic takeaways.
+Structure the report with comprehensive executive findings, structured data tables, key metrics, verified timelines, and strategic takeaways.
 """
 
-                prompt = f"""You are a world-class principal research analyst and writer.
-Draft an exhaustive, publication-grade research report on the topic:
+                prompt = f"""You are a world-class principal research analyst and technical writer.
+Draft an exhaustive, high-accuracy, publication-grade research report on the topic:
 "{topic}"
 
 Live web sources and page contents harvested by the research agents:
 {sources_summary}
 
-Validated Evidence:
+Validated Evidence Claims:
 {facts_summary}
 
 Domain Formatting Requirements:
 {domain_instructions}
 
-General Guidelines:
-1. Be extremely specific: name exact titles, verified dates, actors, directors, venues, or technical specs.
-2. Use beautiful Markdown tables with clear columns.
-3. Provide an insightful Executive Summary at the start.
-4. Add Practical Guidance & Viewer/Attendee Advisory.
-5. Conclude with a complete References & Primary Sources list.
+Critical Grounding & Accuracy Rules:
+1. Ground every single claim, schedule, date, venue, cast member, and specification DIRECTLY in the provided harvested evidence.
+2. Under no circumstance should you use vague placeholder phrases like "Local Area (Multiple Venues / Check Pass)". If a venue or platform is stated in the findings (e.g. Narendra Modi Stadium, YMCA Club, Riverfront, BookMyShow, PVR, Netflix), specify the exact name.
+3. If an announcement date or timing is approximate or awaiting final confirmation, explicitly label it "[Tentative / Awaiting Final Call]".
+4. Use clean, comprehensive Markdown tables. In the last column of tables, provide direct markdown links `[Platform/Domain](URL)` to the source.
+5. Provide an insightful Executive Summary at the start (2-3 paragraphs).
+6. Provide Practical Guidance & Actionable Next Steps (ticketing, booking links, or release alerts).
+7. Conclude with a complete References & Primary Sources section listing each source with its full clickable URL.
 
 Template:
 # Research Report: {topic}
@@ -160,7 +180,7 @@ Template:
 ## References & Primary Sources
 (Numbered list of authoritative references with exact URLs)
 """
-                candidate_models = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.8-flash"]
+                candidate_models = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash"]
                 for model_name in candidate_models:
                     try:
                         resp = client.models.generate_content(
@@ -248,11 +268,7 @@ Template:
                 domain = s.get("domain", "web")
                 url = s.get("url", "#")
                 dt = extract_datetime(snippet, title_clean)
-
-                # Venue detection
-                venue = "City Theatres & Arenas"
-                if "ahmedabad" in topic.lower():
-                    venue = "Ahmedabad Venues"
+                venue = extract_venue(snippet, title_clean, default=f"{topic.title()} Region")
                 report_lines.append(f"| {i+1} | **{title_clean}** | {dt} | {venue} | [{domain}]({url}) |")
 
             report_lines.extend([

@@ -1,7 +1,9 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Loader2,
   CheckCircle2,
@@ -14,6 +16,10 @@ import {
   BrainCircuit,
   Terminal,
   Layers,
+  Copy,
+  Check,
+  Download,
+  Sparkles,
 } from 'lucide-react';
 import { useResearchProgress } from '@/hooks/useResearchProgress';
 
@@ -24,6 +30,27 @@ export default function ResearchProgressPage({
 }) {
   const { id } = use(params);
   const { job, logs, sources, facts, report, loading, error } = useResearchProgress(id);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyReport = () => {
+    if (!report?.content_markdown) return;
+    navigator.clipboard.writeText(report.content_markdown);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadReport = () => {
+    if (!report?.content_markdown) return;
+    const blob = new Blob([report.content_markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `research-report-${job?.topic ? job.topic.toLowerCase().replace(/[^a-z0-9]+/g, '-') : id}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   if (loading && !job) {
     return (
@@ -111,16 +138,29 @@ export default function ResearchProgressPage({
             </span>
           </div>
 
-          {isCompleted && (
-            <Link
-              href={`/reports/${job.id}`}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 hover:opacity-95 transition-all"
-            >
-              <FileText className="h-4 w-4" />
-              View Full Report
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          )}
+          <div className="flex items-center gap-2.5">
+            {report?.content_markdown && (
+              <button
+                onClick={handleCopyReport}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs sm:text-sm font-semibold text-gray-200 hover:bg-white/10 hover:text-white transition-all cursor-pointer shadow-sm"
+                title="Copy generated research report"
+              >
+                {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4 text-blue-400" />}
+                <span>{copied ? 'Copied Report!' : 'Copy Report'}</span>
+              </button>
+            )}
+
+            {isCompleted && (
+              <Link
+                href={`/reports/${job.id}`}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-lg shadow-emerald-500/20 hover:opacity-95 transition-all"
+              >
+                <FileText className="h-4 w-4" />
+                View Full Report
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
+          </div>
         </div>
 
         <h1 className="text-2xl sm:text-3xl font-bold text-white">
@@ -342,6 +382,63 @@ export default function ResearchProgressPage({
                 <p className="text-xs text-gray-300 leading-relaxed">{f.claim}</p>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* Generated Research Report Section */}
+      {report?.content_markdown && (
+        <section className="glass-panel-glow rounded-3xl p-6 sm:p-10 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-6">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-400">
+                <Sparkles className="h-3.5 w-3.5" />
+                Synthesized Research Report
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
+                {report.title || job.topic}
+              </h2>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400 pt-1">
+                <span>Word Count: ~{report.word_count || report.content_markdown.split(/\s+/).length}</span>
+                <span>•</span>
+                <span>Citations: {sources.length} Verified Sources</span>
+                <span>•</span>
+                <span className="text-emerald-400 font-semibold">Evidence Grounded</span>
+              </div>
+            </div>
+
+            {/* Quick Actions Header */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyReport}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600/10 border border-blue-500/30 px-4 py-2.5 text-xs sm:text-sm font-semibold text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 transition-all cursor-pointer shadow-sm"
+              >
+                {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                <span>{copied ? 'Copied to Clipboard!' : 'Copy Report'}</span>
+              </button>
+
+              <button
+                onClick={handleDownloadReport}
+                className="inline-flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 text-xs sm:text-sm font-semibold text-gray-300 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+              >
+                <Download className="h-4 w-4" />
+                <span>Download .md</span>
+              </button>
+
+              <Link
+                href={`/reports/${job.id}`}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:opacity-95 transition-all"
+              >
+                Full Page <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Render Markdown Content */}
+          <div className="prose-report text-gray-200">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {report.content_markdown}
+            </ReactMarkdown>
           </div>
         </section>
       )}

@@ -20,13 +20,18 @@ class ResearcherAgent:
             try:
                 from google import genai
                 client = genai.Client(api_key=settings.gemini_api_key)
-                prompt = f"""You are an elite research analyst. Generate 4 to 5 targeted, highly specific web search queries to research the following topic thoroughly:
+                prompt = f"""You are an elite research analyst. Analyze the following user topic and generate 4 to 5 targeted, highly effective web search queries to research it thoroughly and accurately:
 "{topic}"
+
+Key instructions:
+1. Correct any obvious typos (e.g., "octomber" -> "October", "ahmedabd" -> "Ahmedabad").
+2. Cover multiple dimensions: official schedules/announcements, primary booking/release directories, verified dates/timings/venues, and comprehensive listings.
+3. Keep queries concise, natural for search engines, and keyword-rich.
 
 Output only a valid JSON array of strings, without markdown code fences or other text. Example:
 ["query 1", "query 2", "query 3", "query 4"]
 """
-                candidate_models = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.8-flash"]
+                candidate_models = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash"]
                 for model_name in candidate_models:
                     try:
                         resp = client.models.generate_content(
@@ -51,24 +56,24 @@ Output only a valid JSON array of strings, without markdown code fences or other
 
         if any(w in lower_t for w in ["concert", "event", "show", "tickets", "match", "festival"]):
             return [
-                f"{clean_topic}",
-                f"{clean_topic} schedule dates tickets",
-                f"{clean_topic} venue lineup booking",
+                f"{clean_topic} schedule dates timings",
+                f"{clean_topic} venue location tickets booking",
+                f"upcoming events {clean_topic} official guide",
                 f"latest announcements {clean_topic}"
             ]
-        elif any(w in lower_t for w in ["release", "launch", "movie", "game", "product"]):
+        elif any(w in lower_t for w in ["release", "launch", "movie", "film", "cinema", "game", "product"]):
             return [
-                f"{clean_topic}",
-                f"{clean_topic} release date details",
-                f"{clean_topic} official announcement",
-                f"{clean_topic} specs reviews"
+                f"{clean_topic} release dates calendar",
+                f"{clean_topic} theatrical streaming premiere",
+                f"{clean_topic} official schedule list",
+                f"latest announcements {clean_topic}"
             ]
         else:
             return [
                 f"{clean_topic}",
                 f"latest news and updates {clean_topic}",
                 f"key facts and overview {clean_topic}",
-                f"analysis and details {clean_topic}"
+                f"analysis and verified details {clean_topic}"
             ]
 
     async def collect_sources_and_facts(self, topic: str, queries: List[str]) -> Dict[str, Any]:
@@ -78,7 +83,7 @@ Output only a valid JSON array of strings, without markdown code fences or other
         facts = []
 
         for q in queries:
-            results = await search_tool.search(q, num_results=3)
+            results = await search_tool.search(q, num_results=5)
             for res in results:
                 url = res.get("url")
                 if not url or url in seen_urls:
@@ -89,13 +94,42 @@ Output only a valid JSON array of strings, without markdown code fences or other
                 # Extract claims from snippet/title
                 snippet = res.get("snippet", "")
                 title = res.get("title", "")
+                content = res.get("content", "")
+
+                domain = res.get("domain", "")
+                is_high_cred = any(t in domain for t in [
+                    "gov", "edu", "org", "bookmyshow", "insider.in", "ticketmaster",
+                    "imdb.com", "variety.com", "deadline.com", "hollywoodreporter.com",
+                    "reuters.com", "thehindu.com", "filmibeat.com", "bandsintown.com"
+                ])
+
                 if snippet:
                     facts.append({
                         "claim": f"{title}: {snippet}",
                         "source_url": url,
-                        "domain": res.get("domain", ""),
-                        "confidence": "high" if any(t in res.get("domain", "") for t in ["gov", "edu", "org", "bookmyshow", "insider", "ticketmaster", "reuters", "thehindu"]) else "medium"
+                        "domain": domain,
+                        "confidence": "high" if is_high_cred else "medium"
                     })
+
+                # Extract additional specific factual sentences from deep scraped content
+                if content and len(content) > len(snippet):
+                    # Find sentences mentioning dates, venues, or release announcements
+                    sentences = [s.strip() for s in content.split(".") if len(s.strip()) > 30 and len(s.strip()) < 250]
+                    for s in sentences:
+                        s_lower = s.lower()
+                        if any(k in s_lower for k in [
+                            "pm", "am", "october", "november", "december", "january", "february", "march",
+                            "stadium", "auditorium", "arena", "theatre", "theater", "hall", "ground",
+                            "releasing", "releases on", "premiere", "stars", "directed by", "tickets"
+                        ]):
+                            facts.append({
+                                "claim": f"{title}: {s}",
+                                "source_url": url,
+                                "domain": domain,
+                                "confidence": "high" if is_high_cred else "medium"
+                            })
+                            if len(facts) >= 25:
+                                break
 
         return {
             "sources": sources,

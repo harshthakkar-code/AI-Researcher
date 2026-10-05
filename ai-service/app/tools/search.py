@@ -11,19 +11,26 @@ logger = logging.getLogger(__name__)
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
 
-async def fetch_page_content(url: str, max_chars: int = 1200) -> str:
+async def fetch_page_content(url: str, max_chars: int = 3500) -> str:
     """Scrapes the main body text of a webpage to extract real schedules, movie titles, and event details."""
     if not url or not url.startswith("http"):
         return ""
     try:
-        async with httpx.AsyncClient(timeout=4.0, headers={"User-Agent": USER_AGENT}, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=6.0, headers={"User-Agent": USER_AGENT}, follow_redirects=True) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, "html.parser")
                 # Remove boilerplate tags
-                for tag in soup(["script", "style", "nav", "header", "footer", "aside", "form"]):
+                for tag in soup(["script", "style", "nav", "header", "footer", "aside", "form", "noscript"]):
                     tag.decompose()
-                text = " ".join(soup.stripped_strings)
+                
+                # Check for main or article tags first for cleaner body extraction
+                main_elem = soup.find(["article", "main"]) or soup.body
+                if main_elem:
+                    text = " ".join(main_elem.stripped_strings)
+                else:
+                    text = " ".join(soup.stripped_strings)
+
                 text = re.sub(r'\s{2,}', ' ', text)
                 return text[:max_chars].strip()
     except Exception as e:
@@ -37,7 +44,7 @@ class SearchTool:
     def __init__(self, serper_api_key: str = ""):
         self.serper_api_key = serper_api_key or settings.serper_api_key
 
-    async def search(self, query: str, num_results: int = 5) -> List[Dict[str, Any]]:
+    async def search(self, query: str, num_results: int = 6) -> List[Dict[str, Any]]:
         """Executes a web search for a query, scrapes page text, and returns structured results."""
         results = []
 
@@ -72,7 +79,7 @@ class SearchTool:
         if not results:
             try:
                 from ddgs import DDGS
-                raw_results = list(DDGS().text(query, max_results=num_results))
+                raw_results = list(DDGS().text(query, max_results=max(num_results, 8)))
                 if raw_results:
                     for item in raw_results:
                         url = item.get("href", "")
@@ -98,11 +105,11 @@ class SearchTool:
                 "published_date": None,
             })
 
-        # 4. Enhance top results with live page content scraping
-        for item in results[:3]:
+        # 4. Enhance top results with live page content scraping (top 5 sources)
+        for item in results[:5]:
             url = item.get("url", "")
             if "wikipedia.org" not in url:
-                page_text = await fetch_page_content(url)
+                page_text = await fetch_page_content(url, max_chars=3500)
                 if page_text and len(page_text) > len(item.get("snippet", "")):
                     item["content"] = page_text
                 else:
