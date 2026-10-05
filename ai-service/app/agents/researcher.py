@@ -15,20 +15,26 @@ class ResearcherAgent:
         self.goal = "Formulate high-yield search queries, collect authoritative sources, and extract factual claims."
 
     async def generate_queries(self, topic: str) -> List[str]:
-        """Generates 4 to 6 targeted, diverse search queries for a topic."""
+        """Generates 4 to 5 targeted, high-precision search queries across multiple facets for ANY topic."""
         if settings.gemini_api_key:
             try:
                 from google import genai
                 client = genai.Client(api_key=settings.gemini_api_key)
-                prompt = f"""You are an elite research analyst. Analyze the following user topic and generate 4 to 5 targeted, highly effective web search queries to research it thoroughly and accurately:
-"{topic}"
+                prompt = f"""You are a universal principal research intelligence analyst.
+Your mission is to decompose ANY topic—whether in artificial intelligence, computer science, medicine, finance, quantum physics, engineering, geopolitics, business strategy, culture, festivals, events, history, or daily life—into targeted, high-yield web search queries.
 
-Key instructions:
-1. Correct any obvious typos (e.g., "octomber" -> "October", "ahmedabd" -> "Ahmedabad").
-2. Cover multiple dimensions: official schedules/announcements, primary booking/release directories, verified dates/timings/venues, and comprehensive listings.
-3. Keep queries concise, natural for search engines, and keyword-rich.
+User Topic: "{topic}"
 
-Output only a valid JSON array of strings, without markdown code fences or other text. Example:
+Instructions:
+1. Understand the core domain and underlying intent of the user's inquiry (technical, factual, comparative, statistical, schedule, or analytical).
+2. Auto-correct any subtle typos in technical terms, names, locations, or dates (e.g., "gujrat" -> "Gujarat").
+3. Formulate 4 to 5 distinct, high-precision search queries covering critical dimensions:
+   - If inquiry is about events, festivals, holidays, releases, or timelines: generate queries specifically targeting EXACT CALENDAR DATES (day, month, year), full chronological schedules, and primary panchang/calendar portals (e.g., Drik Panchang, official festival calendars).
+   - If technical / scientific: target foundational mechanisms, latest benchmark comparisons, and empirical datasets.
+   - If business / market: target quantitative market indicators, revenue figures, and competitive dynamics.
+4. Keep queries natural, keyword-dense, and optimized for web search engines.
+
+Output ONLY a valid JSON array of strings, without markdown code fences or conversational text:
 ["query 1", "query 2", "query 3", "query 4"]
 """
                 candidate_models = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash"]
@@ -43,44 +49,39 @@ Output only a valid JSON array of strings, without markdown code fences or other
                             text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
                         queries = json.loads(text)
                         if isinstance(queries, list) and len(queries) > 0:
-                            logger.info(f"Generated search queries with Gemini ({model_name})")
+                            logger.info(f"Generated universal search queries with Gemini ({model_name})")
                             return [str(q) for q in queries]
                     except Exception as model_err:
                         logger.warning(f"Query generation with {model_name} failed: {model_err}")
             except Exception as e:
                 logger.error(f"Error initializing Gemini client for queries: {e}")
 
-        # Dynamic query generation matching the user's specific subject
+        # Universal fallback query generator
         clean_topic = topic.strip()
-        lower_t = clean_topic.lower()
-
-        if any(w in lower_t for w in ["concert", "event", "show", "tickets", "match", "festival"]):
-            return [
-                f"{clean_topic} schedule dates timings",
-                f"{clean_topic} venue location tickets booking",
-                f"upcoming events {clean_topic} official guide",
-                f"latest announcements {clean_topic}"
-            ]
-        elif any(w in lower_t for w in ["release", "launch", "movie", "film", "cinema", "game", "product"]):
-            return [
-                f"{clean_topic} release dates calendar",
-                f"{clean_topic} theatrical streaming premiere",
-                f"{clean_topic} official schedule list",
-                f"latest announcements {clean_topic}"
-            ]
-        else:
-            return [
-                f"{clean_topic}",
-                f"latest news and updates {clean_topic}",
-                f"key facts and overview {clean_topic}",
-                f"analysis and verified details {clean_topic}"
-            ]
+        return [
+            f"{clean_topic} overview technical analysis",
+            f"{clean_topic} latest verified research data",
+            f"{clean_topic} key architecture comparison benchmarks",
+            f"{clean_topic} authoritative guide deep dive",
+            f"latest developments {clean_topic}"
+        ]
 
     async def collect_sources_and_facts(self, topic: str, queries: List[str]) -> Dict[str, Any]:
         """Executes search queries, collects deduplicated sources, and extracts facts."""
         seen_urls = set()
         sources = []
         facts = []
+
+        # Universal high-trust domain authorities
+        universal_authorities = [
+            "gov", "edu", "org", "arxiv.org", "nature.com", "ieee.org", "acm.org",
+            "sciencedirect.com", "nih.gov", "ncbi.nlm.nih.gov", "github.com",
+            "huggingface.co", "reuters.com", "bloomberg.com", "ft.com", "wsj.com",
+            "economist.com", "techcrunch.com", "theverge.com", "bbc.com", "apnews.com",
+            "thehindu.com", "indianexpress.com", "investopedia.com"
+        ]
+
+        import re
 
         for q in queries:
             results = await search_tool.search(q, num_results=5)
@@ -95,13 +96,9 @@ Output only a valid JSON array of strings, without markdown code fences or other
                 snippet = res.get("snippet", "")
                 title = res.get("title", "")
                 content = res.get("content", "")
-
                 domain = res.get("domain", "")
-                is_high_cred = any(t in domain for t in [
-                    "gov", "edu", "org", "bookmyshow", "insider.in", "ticketmaster",
-                    "imdb.com", "variety.com", "deadline.com", "hollywoodreporter.com",
-                    "reuters.com", "thehindu.com", "filmibeat.com", "bandsintown.com"
-                ])
+
+                is_high_cred = any(t in domain for t in universal_authorities)
 
                 if snippet:
                     facts.append({
@@ -111,24 +108,22 @@ Output only a valid JSON array of strings, without markdown code fences or other
                         "confidence": "high" if is_high_cred else "medium"
                     })
 
-                # Extract additional specific factual sentences from deep scraped content
+                # Universal factual extraction from deep scraped content
                 if content and len(content) > len(snippet):
-                    # Find sentences mentioning dates, venues, or release announcements
-                    sentences = [s.strip() for s in content.split(".") if len(s.strip()) > 30 and len(s.strip()) < 250]
+                    sentences = [s.strip() for s in content.split(".") if 35 < len(s.strip()) < 260]
                     for s in sentences:
-                        s_lower = s.lower()
-                        if any(k in s_lower for k in [
-                            "pm", "am", "october", "november", "december", "january", "february", "march",
-                            "stadium", "auditorium", "arena", "theatre", "theater", "hall", "ground",
-                            "releasing", "releases on", "premiere", "stars", "directed by", "tickets"
-                        ]):
+                        # Extract sentences with quantitative data, metrics, causal verbs, or temporal details
+                        has_data = bool(re.search(r'\d+[%$€£]|\b\d{4}\b|\b\d+(?:\.\d+)?\s*(?:billion|million|trillion|percent|users|parameters|tokens|ms|gb|tb|kg|hz|mph|km)\b', s, re.IGNORECASE))
+                        has_analytical_verb = bool(re.search(r'\b(demonstrates?|achieved?|discovered?|published?|announced?|developed?|launched?|reveals?|architecture|algorithm|benchmark|mechanism|policy|breakthrough)\b', s, re.IGNORECASE))
+                        
+                        if has_data or has_analytical_verb:
                             facts.append({
                                 "claim": f"{title}: {s}",
                                 "source_url": url,
                                 "domain": domain,
                                 "confidence": "high" if is_high_cred else "medium"
                             })
-                            if len(facts) >= 25:
+                            if len(facts) >= 28:
                                 break
 
         return {

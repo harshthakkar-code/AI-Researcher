@@ -22,11 +22,13 @@ class ValidatorAgent:
         validated_facts = []
         conflicts = []
 
-        # Domain credibility heuristics
+        # Universal domain credibility heuristics
         high_trust_domains = {
-            "arxiv.org", "github.blog", "nature.com", "ieee.org", "acm.org",
-            "reuters.com", "bloomberg.com", "variety.com", "deadline.com",
-            "thehindu.com", "indianexpress.com", "bookmyshow.com", "ticketmaster.com"
+            "arxiv.org", "nature.com", "science.org", "ieee.org", "acm.org",
+            "sciencedirect.com", "nih.gov", "ncbi.nlm.nih.gov", "github.com",
+            "reuters.com", "bloomberg.com", "ft.com", "wsj.com", "economist.com",
+            "techcrunch.com", "theverge.com", "wired.com", "mit.edu", "stanford.edu",
+            "bbc.com", "apnews.com", "investopedia.com", "gov", "edu"
         }
 
         # AI-powered fact verification if key available
