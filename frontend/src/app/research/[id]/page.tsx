@@ -4,6 +4,7 @@ import { use, useState } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import {
   Loader2,
   CheckCircle2,
@@ -22,6 +23,20 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useResearchProgress } from '@/hooks/useResearchProgress';
+import CodeBlock from '@/components/ui/CodeBlock';
+
+const markdownComponents = {
+  pre({ children, ...props }: any) {
+    return <CodeBlock {...props}>{children}</CodeBlock>;
+  },
+  code({ className, children, ...props }: any) {
+    return (
+      <code className={className || "rounded bg-white/10 px-1.5 py-0.5 font-mono text-xs text-blue-300"} {...props}>
+        {children}
+      </code>
+    );
+  },
+};
 
 export default function ResearchProgressPage({
   params,
@@ -436,7 +451,11 @@ export default function ResearchProgressPage({
 
           {/* Render Markdown Content */}
           <div className="prose-report text-gray-200">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]}
+              components={markdownComponents}
+            >
               {report.content_markdown}
             </ReactMarkdown>
           </div>

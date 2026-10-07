@@ -38,6 +38,18 @@ body {
   background: #374151;
 }
 
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 /* Glassmorphism helpers */
 .glass-panel {
   background: rgba(14, 19, 31, 0.7);
@@ -160,5 +172,125 @@ body {
 
 .prose-report tr:hover td {
   background: rgba(255, 255, 255, 0.03);
+}
+
+.prose-report br {
+  display: block;
+  content: "";
+  margin-top: 0.35rem;
+}
+
+/* Realistic Timeline Rewind Sweep & Catch Animations */
+@keyframes rewindSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+@keyframes revertPulseGlow {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5); border-color: rgba(245, 158, 11, 0.7); }
+  50% { box-shadow: 0 0 30px 6px rgba(245, 158, 11, 0.25); border-color: rgba(245, 158, 11, 0.9); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); border-color: rgba(255, 255, 255, 0.1); }
+}
+
+@keyframes rewindBeamSweep {
+  0% {
+    transform: translateX(120%) skewX(-25deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-160%) skewX(-25deg);
+    opacity: 0;
+  }
+}
+
+@keyframes rewindMessageDissolve {
+  0% {
+    opacity: 1;
+    filter: blur(0px) brightness(1);
+    transform: translateY(0) scale(1);
+    max-height: 1200px;
+  }
+  30% {
+    opacity: 0.9;
+    filter: blur(1px) brightness(1.25);
+    transform: translateY(-2px) scale(0.99);
+  }
+  70% {
+    opacity: 0.4;
+    filter: blur(4px) brightness(1.4);
+    transform: translateY(6px) scale(0.97);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(8px) brightness(1.6);
+    transform: translateY(16px) scale(0.95);
+    max-height: 0px;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+}
+
+@keyframes chatBarCatchPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.6), 0 0 0 0 rgba(245, 158, 11, 0.4);
+    border-color: rgba(59, 130, 246, 0.8);
+  }
+  35% {
+    box-shadow: 0 0 28px 6px rgba(59, 130, 246, 0.45), 0 0 16px 3px rgba(245, 158, 11, 0.35);
+    border-color: rgba(96, 165, 250, 0.95);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
+.animate-rewind {
+  animation: rewindSpin 0.65s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-revert-glow {
+  animation: revertPulseGlow 1.4s ease-out forwards;
+}
+
+.animate-rewind-sweep {
+  position: relative;
+  overflow: hidden;
+  animation: rewindMessageDissolve 0.52s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+.animate-rewind-sweep::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 50%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(56, 189, 248, 0.25) 30%,
+    rgba(245, 158, 11, 0.55) 50%,
+    rgba(96, 165, 250, 0.75) 80%,
+    transparent 100%
+  );
+  filter: blur(8px);
+  animation: rewindBeamSweep 0.52s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.animate-chat-catch {
+  animation: chatBarCatchPulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 

@@ -227,5 +227,70 @@ CRITICAL PRESENTATION & STRUCTURE RULES:
 
         return "\n".join(report_lines)
 
+    async def edit_report(
+        self,
+        original_markdown: str,
+        instruction: str,
+        topic: str,
+        target_section: str = None
+    ) -> Tuple[str, str]:
+        """Performs targeted editorial updates on existing research document based on user prompt."""
+        if not original_markdown:
+            return original_markdown, "No original report provided to edit."
+
+        change_summary = f"Applied editorial changes according to: '{instruction}'"
+
+        if settings.gemini_api_key:
+            try:
+                from google import genai
+                client = genai.Client(api_key=settings.gemini_api_key)
+
+                prompt = f"""You are the Principal Lead Scientific Editor for an autonomous research platform.
+Topic: "{topic}"
+
+The user has requested the following edit/revision to this research report:
+EDITORIAL INSTRUCTION: "{instruction}"
+{f'TARGET SECTION FOCUS: "{target_section}"' if target_section else ''}
+
+CURRENT REPORT MARKDOWN:
+{original_markdown}
+
+EDITORIAL RULES:
+1. Strictly carry out the user's instruction (e.g., make concise, add missing details, add comparative tables, re-organize, or revise tone).
+2. PRESERVE existing valid citations, source links, and verified dates/data unless specifically asked to remove or replace them.
+3. Keep the document professional, well-structured, and formatted with clean GitHub-flavored markdown.
+4. Output ONLY the complete revised markdown text of the report. Do NOT wrap in conversational commentary.
+"""
+                candidate_models = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash"]
+                for model_name in candidate_models:
+                    try:
+                        resp = client.models.generate_content(
+                            model=model_name,
+                            contents=prompt
+                        )
+                        if resp.text:
+                            revised = resp.text.strip()
+                            # Strip markdown code blocks if the model wrapped the response in ```markdown ... ```
+                            revised = re.sub(r'^```(?:markdown)?\s*\n', '', revised)
+                            revised = re.sub(r'\n```\s*$', '', revised)
+                            return revised, change_summary
+                    except Exception as model_err:
+                        logger.warning(f"Gemini edit failed with {model_name}: {model_err}")
+            except Exception as e:
+                logger.error(f"Error initializing Gemini client for editing: {e}")
+
+        # Fallback Algorithmic Edit (e.g., if asking to append or make concise)
+        if "concise" in instruction.lower() or "short" in instruction.lower():
+            # Keep executive summary and tables, condense narrative
+            paragraphs = original_markdown.split("\n\n")
+            condensed = [p for p in paragraphs if p.startswith("#") or "|" in p or len(p) < 400]
+            revised = "\n\n".join(condensed)
+            return revised, "Condensed report to focus on key tables and essential data points."
+
+        # Default fallback: append editorial addendum section
+        revised = original_markdown + f"\n\n---\n### Editorial Update\n*Instruction: {instruction}*\n*Applied automatically based on workspace revision request.*"
+        return revised, change_summary
+
 
 writer_agent = WriterAgent()
+

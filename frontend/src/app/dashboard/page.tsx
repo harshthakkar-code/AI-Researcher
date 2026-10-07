@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   BrainCircuit,
   Trash2,
+  Pin,
 } from 'lucide-react';
 import { ResearchJob } from '@/types';
 import DeleteConfirmModal from '@/components/ui/DeleteConfirmModal';
@@ -115,6 +116,19 @@ export default function Dashboard() {
       alert(`Error deleting job: ${err.message}`);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleTogglePin = async (jobId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setRecentJobs((prev) =>
+      prev.map((j) => (j.id === jobId ? { ...j, is_pinned: !j.is_pinned } : j))
+    );
+    try {
+      await fetch(`/api/research/${jobId}/pin`, { method: 'POST' });
+    } catch (err) {
+      console.error('Failed to toggle pin:', err);
     }
   };
 
@@ -292,6 +306,15 @@ export default function Dashboard() {
                         {new Date(job.created_at).toLocaleDateString()}
                       </span>
                       <button
+                        onClick={(e) => handleTogglePin(job.id, e)}
+                        className={`transition-colors p-1.5 rounded-lg hover:bg-white/10 cursor-pointer ${
+                          job.is_pinned ? 'text-amber-400' : 'text-gray-500 hover:text-amber-400'
+                        }`}
+                        title={job.is_pinned ? 'Unpin' : 'Pin to favorites'}
+                      >
+                        <Pin className={`h-4 w-4 ${job.is_pinned ? 'fill-amber-400/20' : ''}`} />
+                      </button>
+                      <button
                         onClick={(e) => promptDeleteJob(job, e)}
                         className="text-gray-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10 cursor-pointer"
                         title="Delete research"
@@ -362,6 +385,11 @@ export default function Dashboard() {
           }
         }}
       />
+
+      {/* Platform Footer */}
+      <footer className="border-t border-white/5 pt-8 pb-4 text-center text-xs text-gray-500">
+        Autonomous AI Researcher Platform • Next.js + FastAPI + Supabase + CrewAI
+      </footer>
     </div>
   );
 }

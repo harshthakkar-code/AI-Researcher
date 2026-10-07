@@ -4,6 +4,8 @@ node_modules/
 out/
 build/
 dist/
+*.tsbuildinfo
+
 
 # Python Virtual Environments & Bytecode
 .venv/
@@ -28,3 +30,16 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Agent Workflows & GSD Tooling
+.agent/
+.agents/
+.gemini/
+.gsd/
+adapters/
+scripts/
+model_capabilities.yaml
+GSD-STYLE.md
+PROJECT_RULES.md
+VERSION
+

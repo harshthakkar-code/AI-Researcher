@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import List, Dict, Any
 from app.config import settings
 from app.tools.search import search_tool
@@ -81,8 +82,6 @@ Output ONLY a valid JSON array of strings, without markdown code fences or conve
             "thehindu.com", "indianexpress.com", "investopedia.com"
         ]
 
-        import re
-
         for q in queries:
             results = await search_tool.search(q, num_results=5)
             for res in results:
@@ -131,5 +130,95 @@ Output ONLY a valid JSON array of strings, without markdown code fences or conve
             "facts": facts
         }
 
+    async def follow_up_research(
+        self,
+        research_id: str,
+        inquiry: str,
+        config: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """Conducts targeted iterative follow-up web research based on user chat instruction."""
+        from app.services.supabase import (
+            get_job_details,
+            add_source,
+            add_fact,
+            add_agent_log,
+        )
+
+        job = get_job_details(research_id) or {}
+        topic = job.get("topic", "Research Inquiry")
+
+        add_agent_log(
+            research_id=research_id,
+            agent=self.role,
+            event="follow_up_research_started",
+            message=f"Initiating targeted follow-up research on: {inquiry}",
+            metadata={"inquiry": inquiry}
+        )
+
+        # 1. Formulate 2-3 high-precision queries for the specific subtopic
+        queries = [f"{topic} {inquiry}", f"{inquiry} verified data"]
+        if settings.gemini_api_key:
+            try:
+                from google import genai
+                client = genai.Client(api_key=settings.gemini_api_key)
+                prompt = f"""Formulate 2 precise search queries to answer this follow-up inquiry regarding "{topic}":
+Inquiry: "{inquiry}"
+Return a plain JSON list of 2 string queries. Example: ["query 1", "query 2"]"""
+                resp = client.models.generate_content(
+                    model="gemini-3.5-flash-lite",
+                    contents=prompt
+                )
+                if resp.text:
+                    match = re.search(r'\[[\s\S]*?\]', resp.text)
+                    if match:
+                        parsed = json.loads(match.group(0))
+                        if isinstance(parsed, list) and len(parsed) > 0:
+                            queries = [str(q) for q in parsed[:3]]
+            except Exception as e:
+                logger.warning(f"Fallback to default queries for follow-up: {e}")
+
+        # 2. Collect sources and extract facts
+        results = await self.collect_sources_and_facts(topic, queries)
+        new_sources = results.get("sources", [])
+        new_facts = results.get("facts", [])
+
+        added_source_ids = []
+        for s in new_sources:
+            sid = add_source(
+                research_id=research_id,
+                title=s.get("title", "Follow-up Source"),
+                url=s.get("url", ""),
+                domain=s.get("domain", ""),
+                content=s.get("content", ""),
+                relevance_score=s.get("relevance_score", 1.0)
+            )
+            if sid:
+                added_source_ids.append(sid)
+
+        for f in new_facts:
+            add_fact(
+                research_id=research_id,
+                claim=f.get("claim", ""),
+                confidence=f.get("confidence", "medium"),
+                validated=True if f.get("confidence") == "high" else False
+            )
+
+        add_agent_log(
+            research_id=research_id,
+            agent=self.role,
+            event="follow_up_research_completed",
+            message=f"Added {len(new_sources)} new sources and {len(new_facts)} facts for '{inquiry}'",
+            metadata={"sources_count": len(new_sources), "facts_count": len(new_facts)}
+        )
+
+        return {
+            "queries": queries,
+            "new_sources_count": len(new_sources),
+            "new_facts_count": len(new_facts),
+            "new_sources": new_sources[:5],
+            "new_facts": new_facts[:10]
+        }
+
 
 researcher_agent = ResearcherAgent()
+

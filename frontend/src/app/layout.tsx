@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Navbar from '@/components/layout/Navbar';
+import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
 
 export const metadata: Metadata = {
   title: 'Autonomous AI Researcher | Evidence-Grounded Multi-Agent Engine',
@@ -15,14 +16,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-[#07090e] text-gray-100 min-h-screen flex flex-col antialiased selection:bg-blue-500/30 selection:text-blue-200">
-        <Navbar />
-        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
-        </main>
-        <footer className="border-t border-white/5 py-6 text-center text-xs text-gray-500">
-          Autonomous AI Researcher Platform • Next.js + FastAPI + Supabase + CrewAI
-        </footer>
+      <body className="bg-[#07090e] text-gray-100 min-h-screen antialiased selection:bg-blue-500/30 selection:text-blue-200">
+        <WorkspaceLayout>
+          <Navbar />
+          <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col min-h-0">
+            {children}
+          </main>
+        </WorkspaceLayout>
       </body>
     </html>
   );

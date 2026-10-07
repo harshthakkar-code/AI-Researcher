@@ -113,5 +113,65 @@ Example: [1, 2, 4, 5]
             "high_confidence_count": sum(1 for f in validated_facts if f["confidence"] == "high")
         }
 
+    async def verify_specific_claims(
+        self,
+        research_id: str,
+        claim_query: str = None
+    ) -> Dict[str, Any]:
+        """Validates specific claims or entire fact base on demand."""
+        from app.services.supabase import (
+            get_job_details,
+            get_facts_for_research,
+            get_sources_for_research,
+            add_agent_log,
+        )
+
+        job = get_job_details(research_id) or {}
+        topic = job.get("topic", "Research Topic")
+        facts = get_facts_for_research(research_id, limit=40)
+        sources = get_sources_for_research(research_id, limit=30)
+
+        target_facts = facts
+        if claim_query:
+            q_lower = claim_query.lower()
+            matching = [f for f in facts if any(w in f.get("claim", "").lower() for w in q_lower.split() if len(w) > 3)]
+            if matching:
+                target_facts = matching
+
+        add_agent_log(
+            research_id=research_id,
+            agent=self.role,
+            event="claim_verification_started",
+            message=f"Verifying {len(target_facts)} claims against authoritative source corpus.",
+            metadata={"claim_query": claim_query, "target_count": len(target_facts)}
+        )
+
+        validation_result = await self.validate_facts(topic=topic, facts=target_facts, sources=sources)
+        verified = [f.get("claim") for f in validation_result.get("validated_facts", []) if f.get("validated")]
+        conflicts = validation_result.get("conflicts", [])
+
+        add_agent_log(
+            research_id=research_id,
+            agent=self.role,
+            event="claim_verification_completed",
+            message=f"Verified {len(verified)} claims, detected {len(conflicts)} potential conflicts.",
+            metadata={"verified_count": len(verified), "conflicts_count": len(conflicts)}
+        )
+
+        summary = f"Verification check completed across {len(target_facts)} claims. {len(verified)} corroborated, {len(conflicts)} flagged."
+        return {
+            "summary": summary,
+            "verified_count": len(verified),
+            "conflicts": conflicts,
+            "verified_claims": verified[:5]
+        }
+
+    async def deep_verify_report(self, research_id: str, job_id: str) -> None:
+        """Launches the deep async claim-by-claim verification pipeline."""
+        from app.services.verification import run_verification_pipeline
+        await run_verification_pipeline(research_id=research_id, job_id=job_id)
+
 
 validator_agent = ValidatorAgent()
+
+
