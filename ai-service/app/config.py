@@ -6,11 +6,18 @@ class Settings(BaseSettings):
     port: int = 8000
     environment: str = "development"
 
-    # API Keys
+    # API Keys & DB
     gemini_api_key: str = ""
     supabase_url: str = ""
     supabase_service_role_key: str = ""
     serper_api_key: str = ""
+
+    # RAG & Embedding Settings (Verified with Google GenAI SDK v1beta)
+    embedding_model: str = "models/gemini-embedding-001"
+    embedding_dimension: int = 768
+    rag_top_k: int = 6
+    rag_similarity_threshold: float = 0.50
+    documents_bucket: str = "documents"
 
     model_config = SettingsConfigDict(
         env_file=".env",

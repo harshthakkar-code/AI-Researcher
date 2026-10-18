@@ -18,9 +18,11 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  BookOpen,
 } from 'lucide-react';
 import { useSessionList } from '@/hooks/useSessionList';
 import { ResearchJob } from '@/types';
+import KnowledgeBaseModal from '@/components/ui/KnowledgeBaseModal';
 
 interface SidebarProps {
   isMobileOpen?: boolean;
@@ -30,6 +32,7 @@ interface SidebarProps {
 export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isKbModalOpen, setIsKbModalOpen] = useState(false);
 
   const {
     pinnedSessions,
@@ -205,8 +208,8 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
         )}
       </div>
 
-      {/* Main Action: New Research */}
-      <div className={`p-2.5 border-b border-white/5 flex ${isCollapsed ? 'justify-center' : ''}`}>
+      {/* Main Actions: New Research & Knowledge Base */}
+      <div className={`p-2.5 border-b border-white/5 space-y-1.5 flex flex-col ${isCollapsed ? 'items-center' : ''}`}>
         <Link
           href="/dashboard"
           onClick={onMobileClose}
@@ -218,6 +221,20 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           <Plus className="h-4 w-4 shrink-0" />
           {!isCollapsed && <span>New Research</span>}
         </Link>
+
+        <button
+          onClick={() => {
+            setIsKbModalOpen(true);
+            if (onMobileClose) onMobileClose();
+          }}
+          className={`flex items-center justify-center rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 font-semibold text-xs border border-indigo-500/20 transition-all cursor-pointer ${
+            isCollapsed ? 'h-9 w-9 p-0' : 'w-full gap-2 py-2 px-3'
+          }`}
+          title="Knowledge Base (Upload Books & Scriptures for RAG)"
+        >
+          <BookOpen className="h-4 w-4 shrink-0 text-indigo-400" />
+          {!isCollapsed && <span>Knowledge Base</span>}
+        </button>
       </div>
 
       {/* Search Input (visible when expanded) */}
@@ -352,6 +369,12 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
       >
         {content}
       </aside>
+
+      {/* Knowledge Base & RAG Modal */}
+      <KnowledgeBaseModal
+        isOpen={isKbModalOpen}
+        onClose={() => setIsKbModalOpen(false)}
+      />
     </>
   );
 }

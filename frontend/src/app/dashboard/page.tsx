@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -17,13 +17,22 @@ import {
   BrainCircuit,
   Trash2,
   Pin,
+  BookOpen,
+  Globe,
+  ChevronDown,
+  Check,
+  Database,
 } from 'lucide-react';
-import { ResearchJob } from '@/types';
+import { ResearchJob, SourceMode } from '@/types';
 import DeleteConfirmModal from '@/components/ui/DeleteConfirmModal';
 
 export default function Dashboard() {
   const router = useRouter();
   const [topic, setTopic] = useState('');
+  const [sourceMode, setSourceMode] = useState<SourceMode>('knowledge_base');
+  const [isSourceMenuOpen, setIsSourceMenuOpen] = useState(false);
+  const sourceMenuRef = useRef<HTMLDivElement>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [recentJobs, setRecentJobs] = useState<ResearchJob[]>([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
@@ -34,13 +43,44 @@ export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Suggestions for fast exploration
-  const suggestions = [
+  // Suggestions tailored to the active research scope
+  const kbSuggestions = [
+    "What does the Bhagavad Gita say about performing duty without attachment?",
+    "Chapter 2 Verse 47 meaning and philosophical commentary",
+    "How does Krishna describe the characteristics of a Sthitaprajna?",
+    "The philosophy of Nishkama Karma and Svadharma in Gita",
+  ];
+
+  const webSuggestions = [
     'Latest developments in AI Agents',
     'Quantum computing breakthroughs in 2026',
     'Self-correcting code generation architectures',
     'Multi-agent consensus protocols in enterprise',
   ];
+
+  const hybridSuggestions = [
+    'Synthesizing Eastern philosophical ethics with AI alignment',
+    'Bhagavad Gita leadership principles compared with modern organizational psychology',
+    'Dharma and modern ethical frameworks in autonomous systems',
+  ];
+
+  const activeSuggestions =
+    sourceMode === 'knowledge_base'
+      ? kbSuggestions
+      : sourceMode === 'hybrid'
+      ? hybridSuggestions
+      : webSuggestions;
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (sourceMenuRef.current && !sourceMenuRef.current.contains(event.target as Node)) {
+        setIsSourceMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     fetchRecentJobs();
@@ -72,7 +112,10 @@ export default function Dashboard() {
       const res = await fetch('/api/research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: topic.trim() }),
+        body: JSON.stringify({
+          topic: topic.trim(),
+          source_mode: sourceMode,
+        }),
       });
 
       const data = await res.json();
@@ -153,18 +196,117 @@ export default function Dashboard() {
           {/* Research Input Form */}
           <form id="new" onSubmit={handleStartResearch} className="pt-2 space-y-4">
             <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Enter a research topic (e.g. Latest developments in AI Agents)..."
-                  disabled={isSubmitting}
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 py-4 pl-12 pr-4 text-white placeholder-gray-500 shadow-inner focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-sm sm:text-base transition-all"
-                />
+              {/* Integrated Search Bar with Clean Context Selector */}
+              <div className="relative flex-1 flex flex-col sm:flex-row items-stretch sm:items-center rounded-2xl border border-white/10 bg-white/5 shadow-inner focus-within:border-blue-500/80 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all p-1.5 sm:p-2 gap-2">
+                
+                {/* Context Selector Trigger Button */}
+                <div className="relative" ref={sourceMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsSourceMenuOpen(!isSourceMenuOpen)}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shadow-sm ${
+                      sourceMode === 'knowledge_base'
+                        ? 'border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20'
+                        : sourceMode === 'web'
+                        ? 'border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'
+                        : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                    }`}
+                  >
+                    {sourceMode === 'knowledge_base' && <BookOpen className="h-4 w-4 text-purple-400" />}
+                    {sourceMode === 'web' && <Globe className="h-4 w-4 text-blue-400" />}
+                    {sourceMode === 'hybrid' && <Sparkles className="h-4 w-4 text-amber-400" />}
+                    <span>
+                      {sourceMode === 'knowledge_base' ? 'Knowledge Base' : sourceMode === 'web' ? 'Web Intelligence' : 'Hybrid'}
+                    </span>
+                    <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${isSourceMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Clean, Minimal Dropdown Menu */}
+                  {isSourceMenuOpen && (
+                    <div className="absolute left-0 top-full mt-2 w-52 rounded-xl border border-white/15 bg-slate-950/95 backdrop-blur-xl p-1.5 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="space-y-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSourceMode('knowledge_base');
+                            setIsSourceMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+                            sourceMode === 'knowledge_base'
+                              ? 'bg-purple-500/20 text-purple-200'
+                              : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <BookOpen className="h-4 w-4 text-purple-400" />
+                            <span>Knowledge Base</span>
+                          </span>
+                          {sourceMode === 'knowledge_base' && <Check className="h-3.5 w-3.5 text-purple-400" />}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSourceMode('web');
+                            setIsSourceMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+                            sourceMode === 'web'
+                              ? 'bg-blue-500/20 text-blue-200'
+                              : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Globe className="h-4 w-4 text-blue-400" />
+                            <span>Web Intelligence</span>
+                          </span>
+                          {sourceMode === 'web' && <Check className="h-3.5 w-3.5 text-blue-400" />}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSourceMode('hybrid');
+                            setIsSourceMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+                            sourceMode === 'hybrid'
+                              ? 'bg-amber-500/20 text-amber-200'
+                              : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Sparkles className="h-4 w-4 text-amber-400" />
+                            <span>Hybrid</span>
+                          </span>
+                          {sourceMode === 'hybrid' && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Input Text Box */}
+                <div className="relative flex-1 flex items-center">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder={
+                      sourceMode === 'knowledge_base'
+                        ? "Search Knowledge Base (e.g. What does Bhagavad Gita say about duty?)..."
+                        : sourceMode === 'web'
+                        ? "Search Web Intelligence (e.g. Latest breakthroughs in AI Agents)..."
+                        : "Search all sources (Knowledge Base + Live Web)..."
+                    }
+                    disabled={isSubmitting}
+                    className="w-full bg-transparent py-3 pl-9 pr-3 text-white placeholder-gray-500 focus:outline-none text-sm sm:text-base"
+                  />
+                </div>
               </div>
 
+              {/* Start Research Button */}
               <button
                 type="submit"
                 disabled={isSubmitting || !topic.trim()}
@@ -191,15 +333,17 @@ export default function Dashboard() {
               </p>
             )}
 
-            {/* Topic Suggestions */}
+            {/* Dynamic Topic Suggestions based on active scope */}
             <div className="flex flex-wrap items-center gap-2 pt-2">
-              <span className="text-xs text-gray-400">Popular topics:</span>
-              {suggestions.map((sug) => (
+              <span className="text-xs text-gray-400">
+                {sourceMode === 'knowledge_base' ? 'Scriptural topics:' : 'Popular topics:'}
+              </span>
+              {activeSuggestions.map((sug) => (
                 <button
                   key={sug}
                   type="button"
                   onClick={() => setTopic(sug)}
-                  className="rounded-lg border border-white/5 bg-white/5 px-2.5 py-1 text-xs text-gray-300 hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-300 transition-colors cursor-pointer"
+                  className="rounded-lg border border-white/5 bg-white/5 px-2.5 py-1 text-xs text-gray-300 hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-purple-300 transition-colors cursor-pointer"
                 >
                   {sug}
                 </button>
@@ -207,6 +351,7 @@ export default function Dashboard() {
             </div>
           </form>
         </div>
+
 
         {/* Ambient background decoration */}
         <div className="absolute right-0 top-0 -z-0 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />

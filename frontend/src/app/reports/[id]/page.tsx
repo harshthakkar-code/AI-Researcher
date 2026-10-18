@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect, useRef, useCallback } from 'react';
+import { use, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -32,8 +32,10 @@ import {
   Pencil,
   MoreHorizontal,
   Download,
+  Globe,
+  ChevronDown,
 } from 'lucide-react';
-import { Report, ResearchJob, Source, SessionMessage } from '@/types';
+import { Report, ResearchJob, Source, SessionMessage, SourceMode } from '@/types';
 import DeleteConfirmModal from '@/components/ui/DeleteConfirmModal';
 import VersionHistoryModal from '@/components/ui/VersionHistoryModal';
 import RevertConfirmModal from '@/components/ui/RevertConfirmModal';
@@ -86,6 +88,9 @@ export default function ReportPage({
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const [chatInput, setChatInput] = useState('');
+  const [sourceMode, setSourceMode] = useState<SourceMode>('knowledge_base');
+  const [isSourceMenuOpen, setIsSourceMenuOpen] = useState(false);
+  const sourceMenuRef = useRef<HTMLDivElement>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -466,12 +471,13 @@ export default function ReportPage({
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
         setIsMoreMenuOpen(false);
       }
+      if (sourceMenuRef.current && !sourceMenuRef.current.contains(e.target as Node)) {
+        setIsSourceMenuOpen(false);
+      }
     }
-    if (isMoreMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isMoreMenuOpen]);
+  }, []);
 
   // Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -527,7 +533,7 @@ export default function ReportPage({
     if (!chatInput.trim() || isChatSending) return;
     const text = chatInput.trim();
     setChatInput('');
-    await handleSendChatMessage(text);
+    await handleSendChatMessage(text, sourceMode);
     setTimeout(() => {
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
@@ -535,7 +541,7 @@ export default function ReportPage({
 
   const handleQuickPromptClick = async (prompt: string) => {
     if (isChatSending) return;
-    await handleSendChatMessage(prompt);
+    await handleSendChatMessage(prompt, sourceMode);
     setTimeout(() => {
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
@@ -549,6 +555,18 @@ export default function ReportPage({
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
   };
+
+  // Clean markdown to remove duplicate top H1 title and corrupted replacement characters
+  const cleanedMarkdown = useMemo(() => {
+    if (!report?.content_markdown) return '';
+    let md = report.content_markdown.trim();
+    // 1. Strip redundant leading # Research Report: "..." or # Autonomous Research: "..."
+    // because the header card right above already renders the large title H1
+    md = md.replace(/^#\s*(?:Research Report|Autonomous Research|Autonomous Synthesis Report):\s*["'“]?[^"\n]+["'”]?\s*\n+/i, '');
+    // 2. Remove corrupted replacement characters
+    md = md.replace(/\ufffd/g, '');
+    return md;
+  }, [report?.content_markdown]);
 
   if (loading) {
     return (
@@ -761,7 +779,7 @@ export default function ReportPage({
                 rehypePlugins={[rehypeRaw]}
                 components={markdownComponents}
               >
-                {report?.content_markdown || ''}
+                {cleanedMarkdown}
               </ReactMarkdown>
             </div>
           </article>
@@ -1021,15 +1039,103 @@ export default function ReportPage({
             ))}
           </div>
 
-          {/* ChatGPT Capsule Input */}
+          {/* ChatGPT Capsule Input with Clean Context Selector */}
           <form
             onSubmit={handleChatSubmit}
-            className={`relative flex items-center rounded-2xl border bg-[#121622]/95 backdrop-blur-2xl shadow-2xl transition-all p-1 ${
+            className={`relative flex items-center rounded-2xl border bg-[#121622]/95 backdrop-blur-2xl shadow-2xl transition-all p-1 gap-1.5 ${
               isInputGlowing
                 ? 'border-blue-400 ring-2 ring-blue-400/50 animate-chat-catch'
                 : 'border-white/15 focus-within:border-blue-500/60 focus-within:ring-2 focus-within:ring-blue-500/25'
             }`}
           >
+            {/* Clean Context Scope Selector */}
+            <div className="relative pl-1.5 shrink-0" ref={sourceMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsSourceMenuOpen(!isSourceMenuOpen)}
+                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-xs font-medium transition-all cursor-pointer whitespace-nowrap shadow-sm ${
+                  sourceMode === 'knowledge_base'
+                    ? 'border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20'
+                    : sourceMode === 'web'
+                    ? 'border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                }`}
+                title="Select Context Scope"
+              >
+                {sourceMode === 'knowledge_base' && <BookOpen className="h-3.5 w-3.5 text-purple-400" />}
+                {sourceMode === 'web' && <Globe className="h-3.5 w-3.5 text-blue-400" />}
+                {sourceMode === 'hybrid' && <Sparkles className="h-3.5 w-3.5 text-amber-400" />}
+                <span>
+                  {sourceMode === 'knowledge_base' ? 'Knowledge Base' : sourceMode === 'web' ? 'Web' : 'Hybrid'}
+                </span>
+                <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform ${isSourceMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Minimalist Popover Menu (opens upward) */}
+              {isSourceMenuOpen && (
+                <div className="absolute left-0 bottom-full mb-2 w-48 rounded-xl border border-white/15 bg-slate-950/95 backdrop-blur-xl p-1.5 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                  <div className="space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSourceMode('knowledge_base');
+                        setIsSourceMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                        sourceMode === 'knowledge_base'
+                          ? 'bg-purple-500/20 text-purple-200'
+                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-purple-400" />
+                        <span>Knowledge Base</span>
+                      </span>
+                      {sourceMode === 'knowledge_base' && <Check className="h-3.5 w-3.5 text-purple-400" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSourceMode('web');
+                        setIsSourceMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                        sourceMode === 'web'
+                          ? 'bg-blue-500/20 text-blue-200'
+                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Globe className="h-4 w-4 text-blue-400" />
+                        <span>Web</span>
+                      </span>
+                      {sourceMode === 'web' && <Check className="h-3.5 w-3.5 text-blue-400" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSourceMode('hybrid');
+                        setIsSourceMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                        sourceMode === 'hybrid'
+                          ? 'bg-amber-500/20 text-amber-200'
+                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-amber-400" />
+                        <span>Hybrid</span>
+                      </span>
+                      {sourceMode === 'hybrid' && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <textarea
               ref={chatInputRef}
               value={chatInput}
@@ -1040,9 +1146,15 @@ export default function ReportPage({
                   handleChatSubmit(e);
                 }
               }}
-              placeholder="Ask a question, request an edit, or deep-verify facts..."
+              placeholder={
+                sourceMode === 'knowledge_base'
+                  ? "Ask or edit with Knowledge Base (e.g. summarize chapter 2, edit tone)..."
+                  : sourceMode === 'web'
+                  ? "Ask or edit with Web Intelligence..."
+                  : "Ask or edit (Knowledge Base + Web)..."
+              }
               rows={1}
-              className="flex-1 bg-transparent py-3 pl-4 pr-12 text-sm text-white placeholder-gray-500 focus:outline-none resize-none max-h-32"
+              className="flex-1 bg-transparent py-3 pl-2 pr-12 text-sm text-white placeholder-gray-500 focus:outline-none resize-none max-h-32"
             />
             <button
               type="submit"

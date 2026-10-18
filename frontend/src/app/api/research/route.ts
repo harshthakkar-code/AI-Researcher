@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 
 export async function POST(request: Request) {
   try {
-    const { topic } = await request.json();
+    const { topic, source_mode = 'knowledge_base' } = await request.json();
 
     if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
       return NextResponse.json(
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    // 1. Create research_job record in Supabase
+    // 1. Create research_job record in Supabase with source_mode config
     const { data: job, error: insertError } = await supabase
       .from('research_jobs')
       .insert({
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
         user_id: user?.id || null,
         status: 'pending',
         progress: 0,
+        config: { source_mode },
       })
       .select()
       .single();
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
         body: JSON.stringify({
           research_id: job.id,
           topic: job.topic,
+          source_mode,
         }),
       });
 

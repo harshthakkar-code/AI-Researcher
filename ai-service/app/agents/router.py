@@ -7,6 +7,7 @@ from app.agents.chat import ChatAgent
 from app.agents.researcher import ResearcherAgent
 from app.agents.writer import WriterAgent
 from app.agents.validator import ValidatorAgent
+from app.agents.rag_agent import RagAgent
 from app.services.supabase import (
     get_job_details,
     get_report_for_research,
@@ -14,8 +15,9 @@ from app.services.supabase import (
     update_research_config,
     add_agent_log,
     get_session_messages,
+    get_session_document_ids,
 )
-from app.models.schemas import ChatResponse, ChatSourceRef
+from app.models.schemas import ChatResponse, ChatSourceRef, RagSourceCitation
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,7 @@ class IntentRouter:
     """Intelligent intent classifier and orchestrator for autonomous research sessions.
     
     Classifies user messages into one or multiple actionable intents and coordinates
-    parallel and sequential agent execution (research, validation, editing, Q&A).
+    parallel and sequential agent execution (research, validation, editing, Q&A, RAG).
     """
 
     def __init__(self):
@@ -32,6 +34,30 @@ class IntentRouter:
         self.researcher_agent = ResearcherAgent()
         self.writer_agent = WriterAgent()
         self.validator_agent = ValidatorAgent()
+        self.rag_agent = RagAgent()
+
+    @staticmethod
+    def is_explicit_report_edit(user_message: str) -> bool:
+        """Determines whether user is explicitly asking to modify the main saved report document,
+        as opposed to asking a question, seeking an explanation, or requesting a chat answer in Gujarati."""
+        msg = user_message.lower().strip()
+
+        # Explicit report document modification commands
+        report_edit_patterns = [
+            r'\b(?:edit|update|rewrite|modify|revise)\s+(?:the\s+)?(?:report|document|article|draft)\b',
+            r'\b(?:add|insert)\s+(?:a\s+)?(?:section|table|paragraph)\s+(?:to|in|into)\s+(?:the\s+)?(?:report|document)\b',
+            r'\b(?:translate|convert)\s+(?:the\s+)?(?:report|document)\s+(?:to|into)\b',
+            r'\b(?:make|shorten|expand)\s+(?:the\s+)?(?:report|document)\b',
+            r'(?:રિપોર્ટ|ડોક્યુમેન્ટ)\s*(?:બદલો|અપડેટ|સુધારો|ફેરફાર)'
+        ]
+
+        if any(re.search(pat, msg) for pat in report_edit_patterns):
+            return True
+
+        if any(w in msg for w in ["edit report", "update report", "rewrite report", "modify report", "revise report"]):
+            return True
+
+        return False
 
     async def classify_intents(
         self,
@@ -64,18 +90,20 @@ Recent Conversation Context:
 {history_context or 'No previous messages in thread.'}
 
 Classify this prompt into ONE OR MORE of the following operational intents (resolving references like "this", "it", or "the table above" using the conversation context):
-1. "chat": The user is asking a question or seeking explanation/clarification from the existing research.
-2. "research_request": The user wants to search, gather more sources, or investigate an additional angle or subtopic.
-3. "edit_request": The user wants to modify, shorten, expand, translate, or reformat the current report.
-4. "verify_request": The user wants to fact-check, verify claims, or check for inconsistencies.
-5. "regenerate": The user wants a full regeneration/re-synthesis of the report.
-6. "config_update": The user wants to adjust parameters (e.g., date ranges, depth, source policy).
-7. "export_request": The user wants to create, download, save, or export a PDF, Word document, or table of a specific section or the entire report (e.g., "create pdf of this Letter M...", "download pdf of table", "export section as pdf").
+1. "rag_query": The user is asking a question about an uploaded document, scripture (such as the Bhagavad Gita), specific chapters, verses, or spiritual/philosophical tenets in the knowledge base, OR asking for an explanation/answer in any language (like Gujarati/Hindi).
+2. "hybrid_query": The user is asking to compare or bridge knowledge base doctrine (e.g. Gita) with external modern concepts (e.g. psychology, science, modern world).
+3. "chat": The user is asking a general question or seeking explanation/clarification from existing research or general conversation.
+4. "research_request": The user wants to search the live web, gather more sources, or investigate an external subtopic.
+5. "edit_request": ONLY when the user EXPLICITLY requests modifying, editing, or rewriting the actual saved research report document itself (e.g. "update the report", "edit the document", "add this section into the report"). CRITICAL: If the user simply asks a question in Gujarati or another language, or asks "tell me in Gujarati", "explain in Gujarati", or "answer in Gujarati", this is a "rag_query" or "chat" inquiry, NOT an "edit_request". Do NOT modify the report document for conversational questions.
+6. "verify_request": The user wants to fact-check, verify claims, or check for inconsistencies.
+7. "regenerate": The user wants a full regeneration/re-synthesis of the entire report from scratch.
+8. "config_update": The user wants to adjust parameters (e.g., date ranges, depth, source policy).
+9. "export_request": The user wants to create, download, save, or export a PDF, Word document, or table of a specific section or the entire report.
 
 Return a valid JSON array of objects with "intent" and relevant parameters ("inquiry", "instruction", "claim_query", "config", "target").
 Example:
 [
-  {{"intent": "export_request", "target": "Letter M section"}},
+  {{"intent": "rag_query", "inquiry": "What does Krishna say about duty in Chapter 2?"}},
   {{"intent": "chat", "inquiry": "explain spiritual depth"}}
 ]
 """
@@ -100,6 +128,18 @@ Example:
         if any(w in msg_lower for w in ["create pdf", "make pdf", "download pdf", "export pdf", "generate pdf", "save as pdf", "export as pdf", "get pdf", "give me pdf", "export to pdf", "pdf of this", "pdf of section", "download this as pdf", "make a pdf"]):
             intents.append({"intent": "export_request", "target": user_message})
 
+        # Check for hybrid query
+        if any(w in msg_lower for w in ["compare", "in modern", "modern psychology", "scientific perspective", "how does that relate to today"]):
+            if any(w in msg_lower for w in ["gita", "krishna", "verse", "chapter", "scripture", "karma yoga", "bhagavad"]):
+                intents.append({"intent": "hybrid_query", "inquiry": user_message})
+
+        # Check for RAG / Scripture query
+        if not any(i.get("intent") == "hybrid_query" for i in intents):
+            has_verse_pattern = bool(re.search(r'\b\d{1,2}\.\d{1,2}\b', msg_lower))
+            has_scripture_kw = any(w in msg_lower for w in ["gita", "bhagavad", "sloka", "shloka", "verse", "arjuna", "krishna", "chapter 1", "chapter 2", "chapter 3", "chapter 4", "chapter 5", "chapter 6", "nishkama", "purushottama", "sankhya yoga", "in the pdf", "in the document", "in the book"])
+            if has_verse_pattern or has_scripture_kw:
+                intents.append({"intent": "rag_query", "inquiry": user_message})
+
         # Check for config update
         date_match = re.search(r'\b(202[4-9])\b', msg_lower)
         if any(w in msg_lower for w in ["only use", "date range", "from year", "filter by year"]):
@@ -120,8 +160,8 @@ Example:
         if any(w in msg_lower for w in ["regenerate", "re-create", "generate again", "rewrite completely"]):
             intents.append({"intent": "regenerate"})
 
-        # Check for edit (only if not an export request)
-        elif not any(i.get("intent") == "export_request" for i in intents) and any(w in msg_lower for w in ["make it concise", "shorten", "add table", "summarize into table", "translate", "edit report", "reformat"]):
+        # Check for edit (only if not an export request AND explicitly commanding report document modification)
+        elif not any(i.get("intent") == "export_request" for i in intents) and self.is_explicit_report_edit(user_message):
             intents.append({"intent": "edit_request", "instruction": user_message})
 
         # If nothing specific was triggered, default to chat
@@ -210,7 +250,7 @@ Example:
         # 3. Default fallback: return full report markdown
         return default_title, report_markdown
 
-    async def execute(self, research_id: str, user_message: str) -> Dict[str, Any]:
+    async def execute(self, research_id: str, user_message: str, source_mode: str = "knowledge_base") -> Dict[str, Any]:
         """Classifies and executes all intents, returning synthesized responses and document updates."""
         job = get_job_details(research_id) or {}
         topic = job.get("topic", "Research Workspace")
@@ -219,7 +259,28 @@ Example:
         chat_history = get_session_messages(research_id, limit=8)
 
         intents = await self.classify_intents(user_message, topic, chat_history=chat_history)
-        logger.info(f"Router identified intents for job {research_id}: {intents}")
+
+        # Safeguard: Downgrade false edit_requests if the user did not explicitly command a report update
+        refined_intents = []
+        for item in intents:
+            if item.get("intent") == "edit_request" and not self.is_explicit_report_edit(user_message):
+                logger.info(f"Steering conversational prompt '{user_message}' from edit_request to chat/RAG inquiry")
+                if source_mode == "knowledge_base":
+                    refined_intents.append({"intent": "rag_query", "inquiry": user_message})
+                else:
+                    refined_intents.append({"intent": "chat", "inquiry": user_message})
+            else:
+                refined_intents.append(item)
+        intents = refined_intents
+
+        if source_mode == "knowledge_base":
+            # In exclusive Knowledge Base mode, steer questions and research requests to vector RAG
+            for item in intents:
+                if item.get("intent") in ("chat", "research_request"):
+                    item["intent"] = "rag_query"
+                    item["inquiry"] = user_message
+
+        logger.info(f"Router identified intents for job {research_id} [Scope: {source_mode}]: {intents}")
 
         actions_taken = []
         new_sources = []
@@ -291,9 +352,9 @@ Example:
             actions_taken.append("Regenerated complete report")
             assistant_notes.append("📄 **Report Regenerated**: Built a completely fresh synthesis document incorporating all active evidence.")
 
-        # 6. Targeted Report Editing (Only if NOT an export request and not already regenerated)
+        # 6. Targeted Report Editing (Only if NOT an export request and not already regenerated and user explicitly requested report edit)
         edit_intents = [i for i in intents if i.get("intent") == "edit_request"]
-        if edit_intents and not report_updated and not export_payload:
+        if edit_intents and not report_updated and not export_payload and self.is_explicit_report_edit(user_message):
             instruction = edit_intents[0].get("instruction", user_message)
             revised_markdown, summary = await self.writer_agent.edit_report(
                 original_markdown=report_markdown,
@@ -330,7 +391,85 @@ Click the **Download PDF** button below to download the publication-ready PDF do
                 "export": export_payload,
             }
 
-        # 7. Conversational Q&A / Synthesis
+        # 7. Knowledge Base RAG / Scriptural Query
+        rag_intents = [i for i in intents if i.get("intent") == "rag_query"]
+        hybrid_intents = [i for i in intents if i.get("intent") == "hybrid_query"]
+        active_doc_ids = get_session_document_ids(research_id)
+
+        rag_citations = []
+        if rag_intents:
+            inquiry = rag_intents[0].get("inquiry", user_message)
+            rag_res = await self.rag_agent.answer(
+                question=inquiry,
+                chat_history=chat_history,
+                document_ids=active_doc_ids or None
+            )
+            rag_citations = rag_res.get("citations", [])
+            actions_taken.append(f"Retrieved {len(rag_citations)} verified knowledge passages")
+
+            final_message = ""
+            if assistant_notes:
+                final_message += "\n\n".join(assistant_notes) + "\n\n---\n\n"
+            final_message += rag_res["message"]
+
+            return {
+                "message": final_message,
+                "message_type": "finding",
+                "intents": [i.get("intent") for i in intents],
+                "actions_executed": actions_taken,
+                "report_updated": report_updated,
+                "new_report_markdown": revised_markdown if report_updated else None,
+                "sources": [],
+                "relevant_facts": [],
+                "rag_citations": [c.model_dump() for c in rag_citations],
+                "export": export_payload,
+            }
+
+        if hybrid_intents:
+            inquiry = hybrid_intents[0].get("inquiry", user_message)
+            # Parallel RAG retrieval + Web search
+            rag_res = await self.rag_agent.answer(
+                question=inquiry,
+                chat_history=chat_history,
+                document_ids=active_doc_ids or None
+            )
+            rag_citations = rag_res.get("citations", [])
+            web_res = await self.researcher_agent.follow_up_research(research_id, inquiry)
+            new_sources.extend(web_res.get("new_sources", []))
+            new_facts.extend([f.get("claim") for f in web_res.get("new_facts", []) if f.get("claim")])
+
+            actions_taken.append(f"Retrieved {len(rag_citations)} scriptural passages & {len(new_sources)} web sources")
+
+            combined_prompt = f"""Compare and synthesize the scriptural doctrine with modern research.
+Scriptural Evidence:
+{rag_res['message']}
+
+Modern Web Facts:
+{chr(10).join(new_facts[:5])}
+
+User Query:
+{inquiry}
+"""
+            from google import genai
+            client = genai.Client(api_key=settings.gemini_api_key)
+            syn_resp = client.models.generate_content(model="gemini-3.5-flash-lite", contents=combined_prompt)
+            final_message = syn_resp.text or rag_res["message"]
+
+            all_sources = [ChatSourceRef(title=s.get("title"), url=s.get("url"), domain=s.get("domain")) for s in new_sources[:4]]
+            return {
+                "message": final_message,
+                "message_type": "finding",
+                "intents": [i.get("intent") for i in intents],
+                "actions_executed": actions_taken,
+                "report_updated": report_updated,
+                "new_report_markdown": revised_markdown if report_updated else None,
+                "sources": all_sources,
+                "relevant_facts": new_facts[:4],
+                "rag_citations": [c.model_dump() for c in rag_citations],
+                "export": export_payload,
+            }
+
+        # 8. Conversational Q&A / Synthesis
         chat_response = await self.chat_agent.answer(research_id, user_message)
 
         final_message = ""
@@ -352,6 +491,7 @@ Click the **Download PDF** button below to download the publication-ready PDF do
             "new_report_markdown": revised_markdown if report_updated else None,
             "sources": all_sources,
             "relevant_facts": chat_response.relevant_facts + new_facts[:3],
+            "rag_citations": [],
             "export": export_payload,
         }
 

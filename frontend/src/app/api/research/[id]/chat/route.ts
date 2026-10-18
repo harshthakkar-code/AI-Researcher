@@ -8,7 +8,7 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { message } = body;
+    const { message, source_mode = 'knowledge_base' } = body;
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json(
@@ -36,6 +36,7 @@ export async function POST(
       body: JSON.stringify({
         research_id: id,
         message: message.trim(),
+        source_mode,
       }),
     });
 

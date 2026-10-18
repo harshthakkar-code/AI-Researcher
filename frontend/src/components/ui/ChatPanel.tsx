@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { SessionMessage } from '@/types';
 import QuickActions from '@/components/ui/QuickActions';
+import KnowledgeSourceBadge from '@/components/ui/KnowledgeSourceBadge';
 
 interface ChatPanelProps {
   researchId: string;
@@ -166,6 +167,7 @@ export default function ChatPanel({
             const sources = m.metadata?.sources || [];
             const intents = m.metadata?.intents || [];
             const actions = m.metadata?.actions_executed || [];
+            const ragCitations = m.metadata?.rag_citations || [];
 
             return (
               <div
@@ -207,6 +209,16 @@ export default function ChatPanel({
                   {/* Intent Action Badges */}
                   {!isUser && (intents.length > 0 || actions.length > 0) && (
                     <div className="flex flex-wrap gap-1 pt-1 pb-1">
+                      {intents.includes('rag_query') && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                          📜 Knowledge Base Grounded
+                        </span>
+                      )}
+                      {intents.includes('hybrid_query') && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                          ⚖️ Hybrid Doctrine & Web
+                        </span>
+                      )}
                       {intents.includes('research_request') && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                           🔍 Research Expanded
@@ -241,6 +253,17 @@ export default function ChatPanel({
                     </ReactMarkdown>
                   </div>
 
+                  {/* Verified Scriptural / Knowledge Citations */}
+                  {ragCitations.length > 0 && (
+                    <div className="pt-2 border-t border-indigo-500/20 mt-3 space-y-1">
+                      <span className="text-[10px] font-semibold text-indigo-300 uppercase tracking-wider block">
+                        Verified Knowledge Passages ({ragCitations.length}):
+                      </span>
+                      {ragCitations.map((cit: any, cIdx: number) => (
+                        <KnowledgeSourceBadge key={cIdx} citation={cit} index={cIdx} />
+                      ))}
+                    </div>
+                  )}
 
                   {/* Cited Sources Footer */}
                   {sources.length > 0 && (

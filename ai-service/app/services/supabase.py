@@ -593,3 +593,276 @@ def get_verification_results(job_id: str) -> List[Dict[str, Any]]:
         return []
 
 
+# ─────────────────────────────────────────────────────────────
+# Document & Vector RAG Database Methods
+# ─────────────────────────────────────────────────────────────
+
+def create_document(
+    title: str,
+    filename: str,
+    storage_path: str,
+    file_type: str = "application/pdf",
+    file_size_bytes: Optional[int] = None,
+    user_id: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None
+) -> Optional[Dict[str, Any]]:
+    """Creates a new record in public.documents table."""
+    client = get_supabase_client()
+    if not client:
+        return {"id": "mock-doc-uuid", "title": title, "filename": filename, "status": "pending"}
+
+    payload: Dict[str, Any] = {
+        "title": title,
+        "filename": filename,
+        "storage_path": storage_path,
+        "file_type": file_type,
+        "file_size_bytes": file_size_bytes,
+        "status": "pending",
+        "metadata": metadata or {},
+    }
+    if user_id:
+        payload["user_id"] = user_id
+
+    try:
+        res = client.table("documents").insert(payload).execute()
+        return res.data[0] if res.data else None
+    except Exception as e:
+        logger.error(f"Failed to create document record: {e}")
+        return None
+
+
+def update_document(document_id: str, updates: Dict[str, Any]) -> bool:
+    """Updates fields on public.documents."""
+    client = get_supabase_client()
+    if not client:
+        return True
+
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    try:
+        client.table("documents").update(updates).eq("id", document_id).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to update document {document_id}: {e}")
+        return False
+
+
+def get_document(document_id: str) -> Optional[Dict[str, Any]]:
+    """Fetches a document record by ID."""
+    client = get_supabase_client()
+    if not client:
+        return None
+
+    try:
+        res = client.table("documents").select("*").eq("id", document_id).execute()
+        return res.data[0] if (res.data and len(res.data) > 0) else None
+    except Exception as e:
+        logger.error(f"Failed to fetch document {document_id}: {e}")
+        return None
+
+
+def get_user_documents(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Lists all documents available to user, ordered by creation date."""
+    client = get_supabase_client()
+    if not client:
+        return []
+
+    try:
+        query = client.table("documents").select("*").order("created_at", desc=True)
+        if user_id:
+            query = query.or_(f"user_id.eq.{user_id},user_id.is.null")
+        res = query.execute()
+        return res.data or []
+    except Exception as e:
+        logger.error(f"Failed to list user documents: {e}")
+        return []
+
+
+def delete_document(document_id: str) -> bool:
+    """Deletes document and cascades to chunks & jobs."""
+    client = get_supabase_client()
+    if not client:
+        return True
+
+    try:
+        client.table("documents").delete().eq("id", document_id).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to delete document {document_id}: {e}")
+        return False
+
+
+def create_ingestion_job(document_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Creates a tracking record in public.document_ingestion_jobs."""
+    client = get_supabase_client()
+    if not client:
+        return {"id": "mock-job-uuid", "document_id": document_id, "status": "queued"}
+
+    payload: Dict[str, Any] = {
+        "document_id": document_id,
+        "status": "queued",
+        "current_stage": "queued",
+        "progress_percentage": 0,
+        "pages_processed": 0,
+        "chunks_created": 0,
+        "embeddings_created": 0,
+    }
+    if user_id:
+        payload["user_id"] = user_id
+
+    try:
+        res = client.table("document_ingestion_jobs").insert(payload).execute()
+        return res.data[0] if res.data else None
+    except Exception as e:
+        logger.error(f"Failed to create ingestion job for doc {document_id}: {e}")
+        return None
+
+
+def update_ingestion_progress(
+    job_id: str,
+    status: str,
+    current_stage: str,
+    progress_percentage: int,
+    pages_processed: Optional[int] = None,
+    chunks_created: Optional[int] = None,
+    embeddings_created: Optional[int] = None,
+    error: Optional[str] = None
+) -> bool:
+    """Updates progress & telemetry of an ingestion job."""
+    client = get_supabase_client()
+    if not client:
+        logger.info(f"[MOCK SUPABASE] update_ingestion_progress: job={job_id} stage={current_stage} progress={progress_percentage}%")
+        return True
+
+    payload: Dict[str, Any] = {
+        "status": status,
+        "current_stage": current_stage,
+        "progress_percentage": progress_percentage,
+    }
+    if pages_processed is not None:
+        payload["pages_processed"] = pages_processed
+    if chunks_created is not None:
+        payload["chunks_created"] = chunks_created
+    if embeddings_created is not None:
+        payload["embeddings_created"] = embeddings_created
+    if error:
+        payload["error"] = error
+    if status in ("completed", "failed"):
+        payload["completed_at"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        client.table("document_ingestion_jobs").update(payload).eq("id", job_id).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to update ingestion job {job_id}: {e}")
+        return False
+
+
+def get_latest_ingestion_job(document_id: str) -> Optional[Dict[str, Any]]:
+    """Fetches the latest ingestion job for a given document."""
+    client = get_supabase_client()
+    if not client:
+        return None
+
+    try:
+        res = client.table("document_ingestion_jobs").select("*").eq("document_id", document_id).order("started_at", desc=True).limit(1).execute()
+        return res.data[0] if (res.data and len(res.data) > 0) else None
+    except Exception as e:
+        logger.error(f"Failed to get latest ingestion job for doc {document_id}: {e}")
+        return None
+
+
+def bulk_insert_document_chunks(chunks: List[Dict[str, Any]], batch_size: int = 100) -> int:
+    """Inserts chunks with embeddings in batches into public.document_chunks."""
+    client = get_supabase_client()
+    if not client:
+        logger.info(f"[MOCK SUPABASE] bulk_insert_document_chunks: {len(chunks)} chunks inserted.")
+        return len(chunks)
+
+    inserted_count = 0
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i:i + batch_size]
+        try:
+            client.table("document_chunks").insert(batch).execute()
+            inserted_count += len(batch)
+        except Exception as e:
+            logger.error(f"Error inserting chunk batch starting at index {i}: {e}")
+            raise e
+
+    return inserted_count
+
+
+def bind_session_documents(research_id: str, document_ids: List[str]) -> bool:
+    """Sets active knowledge scope for a research session."""
+    client = get_supabase_client()
+    if not client:
+        return True
+
+    try:
+        client.table("session_documents").delete().eq("research_id", research_id).execute()
+        if document_ids:
+            payloads = [{"research_id": research_id, "document_id": did} for did in document_ids]
+            client.table("session_documents").insert(payloads).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to bind session documents for {research_id}: {e}")
+        return False
+
+
+def get_session_document_ids(research_id: str) -> List[str]:
+    """Retrieves list of active document IDs bound to a research session."""
+    client = get_supabase_client()
+    if not client:
+        return []
+
+    try:
+        res = client.table("session_documents").select("document_id").eq("research_id", research_id).execute()
+        if res.data:
+            return [row["document_id"] for row in res.data]
+        return []
+    except Exception as e:
+        logger.error(f"Failed to get session document IDs for {research_id}: {e}")
+        return []
+
+
+def search_document_chunks_hybrid(
+    query_text: str,
+    query_embedding: List[float],
+    match_count: int = 6,
+    filter_document_ids: Optional[List[str]] = None,
+    filter_chapter: Optional[str] = None,
+    filter_verse: Optional[str] = None,
+    filter_user_id: Optional[str] = None,
+    vector_weight: float = 0.7,
+    fts_weight: float = 0.3
+) -> List[Dict[str, Any]]:
+    """Calls match_document_chunks_hybrid PostgreSQL RPC function via Supabase client."""
+    client = get_supabase_client()
+    if not client:
+        logger.info(f"[MOCK SUPABASE] search_document_chunks_hybrid for query: '{query_text}'")
+        return []
+
+    params: Dict[str, Any] = {
+        "query_text": query_text,
+        "query_embedding": query_embedding,
+        "match_count": match_count,
+        "vector_weight": vector_weight,
+        "fts_weight": fts_weight
+    }
+    if filter_document_ids:
+        params["filter_document_ids"] = filter_document_ids
+    if filter_chapter:
+        params["filter_chapter"] = str(filter_chapter)
+    if filter_verse:
+        params["filter_verse"] = str(filter_verse)
+    if filter_user_id:
+        params["filter_user_id"] = filter_user_id
+
+    try:
+        rpc_res = client.rpc("match_document_chunks_hybrid", params).execute()
+        return rpc_res.data or []
+    except Exception as e:
+        logger.error(f"RPC match_document_chunks_hybrid error: {e}")
+        return []
+
+
+

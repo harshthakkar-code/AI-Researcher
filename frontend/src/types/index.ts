@@ -8,6 +8,7 @@ export type ResearchStatus =
   | 'failed';
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
+export type SourceMode = 'knowledge_base' | 'web' | 'hybrid';
 
 export interface Profile {
   id: string;
@@ -64,6 +65,18 @@ export interface ChatSourceRef {
   domain?: string | null;
 }
 
+export interface RagSourceCitation {
+  document_id: string;
+  document_title: string;
+  chapter?: string | null;
+  verse?: string | null;
+  page_number?: number | null;
+  section_title?: string | null;
+  snippet: string;
+  similarity: number;
+  combined_score?: number | null;
+}
+
 export interface ChatResponse {
   message: string;
   message_type: SessionMessageType;
@@ -73,7 +86,59 @@ export interface ChatResponse {
   new_report_markdown?: string | null;
   sources?: ChatSourceRef[];
   relevant_facts?: string[];
+  rag_citations?: RagSourceCitation[];
 }
+
+export type DocumentStatus = 'pending' | 'validating' | 'preview_ready' | 'processing' | 'indexed' | 'failed';
+
+export interface KnowledgeDocument {
+  id: string;
+  user_id?: string | null;
+  title: string;
+  filename: string;
+  file_type: string;
+  file_size_bytes?: number | null;
+  storage_path: string;
+  total_pages: number;
+  total_chunks: number;
+  detected_structure?: Record<string, any>;
+  status: DocumentStatus;
+  error_message?: string | null;
+  metadata?: Record<string, any>;
+  latest_job?: DocumentIngestionJob | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface DocumentIngestionJob {
+  id: string;
+  document_id: string;
+  user_id?: string | null;
+  status: 'queued' | 'validating' | 'extracting' | 'chunking' | 'embedding' | 'indexing' | 'completed' | 'failed';
+  current_stage: string;
+  progress_percentage: number;
+  pages_processed: number;
+  chunks_created: number;
+  embeddings_created: number;
+  error?: string | null;
+  started_at: string;
+  completed_at?: string | null;
+}
+
+export interface DocumentPreview {
+  document_id: string;
+  filename: string;
+  total_pages: number;
+  text_quality: string;
+  characters_per_page_avg: number;
+  detected_edition: string;
+  detected_chapters: number;
+  detected_verses: number;
+  sample_headings: string[];
+  estimated_chunks: number;
+  estimated_tokens: number;
+}
+
 
 
 

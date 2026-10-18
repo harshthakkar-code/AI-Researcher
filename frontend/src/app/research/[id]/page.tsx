@@ -21,6 +21,8 @@ import {
   Check,
   Download,
   Sparkles,
+  BookOpen,
+  Globe,
 } from 'lucide-react';
 import { useResearchProgress } from '@/hooks/useResearchProgress';
 import CodeBlock from '@/components/ui/CodeBlock';
@@ -147,6 +149,25 @@ export default function ResearchProgressPage({
               {isFailed && <AlertCircle className="h-3.5 w-3.5" />}
               Status: {job.status}
             </span>
+
+            {job.config?.source_mode === 'knowledge_base' && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                <BookOpen className="h-3.5 w-3.5 text-purple-400" />
+                Knowledge Base (Strict RAG)
+              </span>
+            )}
+            {job.config?.source_mode === 'web' && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/30">
+                <Globe className="h-3.5 w-3.5 text-blue-400" />
+                Web Research
+              </span>
+            )}
+            {job.config?.source_mode === 'hybrid' && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                Hybrid
+              </span>
+            )}
 
             <span className="text-xs text-gray-400">
               Job ID: <code className="text-gray-300">{job.id.slice(0, 8)}...</code>

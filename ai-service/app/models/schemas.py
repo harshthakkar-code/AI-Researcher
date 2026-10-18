@@ -12,6 +12,7 @@ class HealthResponse(BaseModel):
 class ResearchRequest(BaseModel):
     research_id: str = Field(..., description="UUID of the research job created in Supabase")
     topic: Optional[str] = Field(None, description="Topic to research (optional if fetched from Supabase)")
+    source_mode: Optional[str] = Field("knowledge_base", description="Source scope: 'knowledge_base' | 'web' | 'hybrid'")
 
 
 class ResearchResponse(BaseModel):
@@ -52,12 +53,25 @@ class ResearchConfig(BaseModel):
 class ChatRequest(BaseModel):
     research_id: str = Field(..., description="UUID of the research session")
     message: str = Field(..., description="User question or instruction")
+    source_mode: Optional[str] = Field("knowledge_base", description="Source scope: 'knowledge_base' | 'web' | 'hybrid'")
 
 
 class ChatSourceRef(BaseModel):
     title: Optional[str] = None
     url: str
     domain: Optional[str] = None
+
+
+class RagSourceCitation(BaseModel):
+    document_id: str
+    document_title: str
+    chapter: Optional[str] = None
+    verse: Optional[str] = None
+    page_number: Optional[int] = None
+    section_title: Optional[str] = None
+    snippet: str
+    similarity: float = 0.0
+    combined_score: Optional[float] = None
 
 
 class ChatResponse(BaseModel):
@@ -69,6 +83,7 @@ class ChatResponse(BaseModel):
     new_report_markdown: Optional[str] = None
     sources: List[ChatSourceRef] = []
     relevant_facts: List[str] = []
+    rag_citations: List[RagSourceCitation] = []
     export: Optional[Dict[str, Any]] = None
 
 
@@ -103,3 +118,79 @@ class ReportVersionsResponse(BaseModel):
     active_version_id: Optional[str] = None
 
 
+# ─────────────────────────────────────────────────────────────
+# Document & RAG Schemas
+# ─────────────────────────────────────────────────────────────
+
+class DocumentSchema(BaseModel):
+    id: str
+    user_id: Optional[str] = None
+    title: str
+    filename: str
+    file_type: str = "application/pdf"
+    file_size_bytes: Optional[int] = None
+    storage_path: str
+    total_pages: int = 0
+    total_chunks: int = 0
+    detected_structure: Dict[str, Any] = {}
+    status: str = "pending"
+    error_message: Optional[str] = None
+    metadata: Dict[str, Any] = {}
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class DocumentIngestionJobSchema(BaseModel):
+    id: str
+    document_id: str
+    user_id: Optional[str] = None
+    status: str = "queued"
+    current_stage: str = "queued"
+    progress_percentage: int = 0
+    pages_processed: int = 0
+    chunks_created: int = 0
+    embeddings_created: int = 0
+    error: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class DocumentChunkSchema(BaseModel):
+    id: str
+    document_id: str
+    chunk_index: int
+    page_number: Optional[int] = None
+    chapter: Optional[str] = None
+    verse: Optional[str] = None
+    section_title: Optional[str] = None
+    language: str = "en"
+    content: str
+    token_count: Optional[int] = None
+    metadata: Dict[str, Any] = {}
+
+
+class DocumentPreviewResponse(BaseModel):
+    document_id: str
+    filename: str
+    total_pages: int
+    text_quality: str
+    characters_per_page_avg: float
+    detected_edition: str
+    detected_chapters: int
+    detected_verses: int
+    sample_headings: List[str] = []
+    estimated_chunks: int
+    estimated_tokens: int
+
+
+class RagSearchRequest(BaseModel):
+    query: str
+    document_ids: Optional[List[str]] = None
+    chapter: Optional[str] = None
+    verse: Optional[str] = None
+    top_k: int = 6
+    similarity_threshold: float = 0.50
+
+
+class SessionKnowledgeScopeRequest(BaseModel):
+    document_ids: List[str]

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { SessionMessage } from '@/types';
+import { SessionMessage, SourceMode } from '@/types';
 
 interface UseSessionChatOptions {
   onReportUpdated?: (newMarkdown: string) => void;
@@ -134,7 +134,7 @@ export function useSessionChat(researchId: string, options?: UseSessionChatOptio
     return () => clearInterval(interval);
   }, [isSending, fetchMessages]);
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, sourceMode: SourceMode = 'knowledge_base') => {
     const trimmed = text.trim();
     if (!trimmed || isSending) return;
 
@@ -158,7 +158,7 @@ export function useSessionChat(researchId: string, options?: UseSessionChatOptio
       const res = await fetch(`/api/research/${researchId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: trimmed, source_mode: sourceMode }),
       });
 
       if (!res.ok) {
